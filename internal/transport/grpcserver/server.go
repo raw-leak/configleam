@@ -1,0 +1,5 @@
+package grpcserver
+
+func NewGrpcTransport() {
+
+}
