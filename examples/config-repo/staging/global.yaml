@@ -1,0 +1,10 @@
+# all the files inside this /staging folder are specific for staging environment
+
+database:
+  type: sql
+  host: staging-global-db-host
+  port: 3306
+
+featureFlags:
+  betaFeatures: false
+  darkMode: true

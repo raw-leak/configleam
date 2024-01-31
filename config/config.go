@@ -12,6 +12,9 @@ type Config struct {
 	Port  string `envconfig:"PORT"`
 	Token string `envconfig:"GIT_TOKEN"`
 	Url   string `envconfig:"GIT_URL"`
+
+	RedisAddrs    string `envconfig:"REDIS_ADDRS"`
+	RedisPassword string `envconfig:"REDIS_PASSWORD"`
 }
 
 var (

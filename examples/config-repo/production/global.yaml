@@ -1,0 +1,10 @@
+# all the files inside this /production folder are specific for production environment
+
+database:
+  type: sql
+  host: production-global-db-host
+  port: 3306
+
+featureFlags:
+  betaFeatures: false
+  darkMode: true

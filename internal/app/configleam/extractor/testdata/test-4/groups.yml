@@ -1,0 +1,9 @@
+group:app1:
+  - globalKey1
+  - globalKey2
+  - localKey1:
+      key1: "value1"
+      key2: 2
+  - localKey2: true
+
+group:app2: true

@@ -1,0 +1,18 @@
+group:app1:
+  - globalKey1
+  - globalKey2
+  - globalKey3
+  - globalKey4
+  - globalKey5
+  - globalKey6
+
+group:app2:
+  local1:
+    key1: true
+    key2:
+      key2.1: "value2.1"
+      key2.2: "value2.2"
+  local2:
+    - item1
+    - item2
+    - item3

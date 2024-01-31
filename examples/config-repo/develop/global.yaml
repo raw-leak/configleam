@@ -1,0 +1,10 @@
+# all the files inside this /develop folder are specific for develop environment
+
+database:
+  type: sql
+  host: develop-global-db-host
+  port: 3306
+
+featureFlags:
+  betaFeatures: false
+  darkMode: true

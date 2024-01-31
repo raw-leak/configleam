@@ -1,0 +1,14 @@
+# all the files inside this /develop folder are specific for develop environment
+
+group:analytics:
+  - featureFlags
+  - database:
+      host: staging-analytics-db-host
+      port: 3307
+  - additionalMetrics: true
+
+group:marketing:
+  - database
+  - featureFlags:
+      betaFeatures: true
+  - marketingCampaignsEnabled: true

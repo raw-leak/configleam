@@ -1,0 +1,30 @@
+globalKey1: true
+
+globalKey2:
+  key1: value1
+  key2: value2
+
+globalKey3:
+  - list1
+  - list2
+  - list3:
+      - list3.1
+      - list3.2
+
+globalKey4:
+  - key1.1: value1
+    key1.2: value2
+  - key2.1: value1
+    key2.2: value2
+
+globalKey5:
+  - key1.1: value1
+    key1.2: value2
+  - key2.1: value1
+    key2.2: value2
+
+globalKey6:
+  - - item1
+    - item2
+  - - item3
+    - item4

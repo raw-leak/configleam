@@ -1,0 +1,37 @@
+group:analytics:
+  - database:
+      primary:
+        port: 3310
+  - logging
+  - services
+  - features:
+      featureX: false
+
+group:marketing:
+  - database
+  - logging:
+      level: debug
+  - services:
+      - name: marketingService
+        url: http://marketing.service
+        timeout: 60
+  - features
+
+group:sales:
+  - database:
+      secondary:
+        host: sales-db-host
+        credentials:
+          username: salesuser
+          password: salespass
+  - logging:
+      format: text
+  - services:
+      - name: salesService
+        url: http://sales.service
+        timeout: 20
+  - features:
+      featureY:
+        variants:
+          - D
+          - E

@@ -3,6 +3,7 @@ package httpserver
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 )
 
@@ -21,8 +22,11 @@ func (s *httpServer) ListenAndServe(httpAddr string) error {
 	mux.HandleFunc("/healthz", healthCheckHandler)
 	mux.HandleFunc("/ready", readinessCheckHandler)
 
+	mux.HandleFunc("/cfg", readConfigurationHandler)
+
 	s.server = &http.Server{Addr: fmt.Sprintf(":%s", httpAddr), Handler: mux}
 
+	log.Printf("Starting HTTP server on port %s\n", httpAddr)
 	return s.server.ListenAndServe()
 }
 

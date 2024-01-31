@@ -1,0 +1,31 @@
+database:
+  primary:
+    host: global-db-host-primary
+    port: 3306
+    credentials:
+      username: dbuser
+      password: dbpass
+  secondary:
+    host: global-db-host-secondary
+    port: 3307
+
+logging:
+  level: info
+  format: json
+
+services:
+  - name: authService
+    url: http://auth.service
+    timeout: 30
+  - name: paymentService
+    url: http://payment.service
+    timeout: 45
+
+features:
+  featureX: true
+  featureY:
+    enabled: true
+    variants:
+      - A
+      - B
+      - C

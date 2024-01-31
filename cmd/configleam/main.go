@@ -8,27 +8,53 @@ import (
 	"syscall"
 
 	"github.com/raw-leak/configleam/config"
+	"github.com/raw-leak/configleam/internal/app/configleam/analyzer"
+	"github.com/raw-leak/configleam/internal/app/configleam/extractor"
+	"github.com/raw-leak/configleam/internal/app/configleam/parser"
+	"github.com/raw-leak/configleam/internal/app/configleam/repository"
 	"github.com/raw-leak/configleam/internal/app/configleam/service"
+	rds "github.com/raw-leak/configleam/internal/pkg/redis"
 	"github.com/raw-leak/configleam/internal/transport/httpserver"
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err.Error())
+	}
+}
+
+func run() error {
+	ctx := context.Background()
 	cfg := config.Get()
 
-	s := service.NewConfigleamService(service.ConfigleamServiceConfig{
-		Branches: []string{"develop"},
-		Repos:    []service.ConfigleamRepo{{Url: cfg.Url, Token: cfg.Token}},
+	rdscli, err := rds.New(ctx, rds.RedisConfig{
+		Addr:     cfg.RedisAddrs,
+		Password: cfg.RedisPassword,
 	})
+	if err != nil {
+		return err
+	}
+
+	rdsrepo := repository.NewRedisConfigRepository(rdscli)
+	prsr := parser.New()
+	exct := extractor.New()
+	anlz := analyzer.New()
+
+	// TODO: parameters
+	s := service.New(service.ConfigleamServiceConfig{
+		Envs:  []string{"develop", "release", "main"},
+		Repos: []service.ConfigleamRepo{{Url: cfg.Url, Token: cfg.Token}},
+	}, prsr, exct, rdsrepo, anlz)
 	defer s.Shutdown()
 
-	s.Run()
+	s.Run(ctx)
 
 	httpServer := httpserver.NewHttpTransport()
-	// grpcServer := grpcserver.NewGrpcTransport()
 
 	errChan := make(chan error, 2)
 
 	go func() {
+
 		if err := httpServer.ListenAndServe(cfg.Port); err != nil {
 			errChan <- err
 		}
@@ -44,10 +70,12 @@ func main() {
 		log.Printf("Server error: %v", err)
 	}
 
-	err := httpServer.Shutdown(context.Background())
+	err = httpServer.Shutdown(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	log.Println("HTTP server gracefully shutdown")
+
+	return nil
 }

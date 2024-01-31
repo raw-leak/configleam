@@ -1,4 +1,5 @@
 .env
 
-/build
-/repositories
+build/
+repositories/
+.vscode/
