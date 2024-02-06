@@ -162,7 +162,7 @@ func TestExtractConfigList(t *testing.T) {
 						},
 					},
 				},
-				// file: groups.yaml
+				// file: groups1.yaml
 				map[string]interface{}{
 					"group:analytics": []interface{}{
 						map[string]interface{}{
@@ -173,12 +173,6 @@ func TestExtractConfigList(t *testing.T) {
 							},
 						},
 						"logging",
-						"services",
-						map[string]interface{}{
-							"features": map[string]interface{}{
-								"featureX": false,
-							},
-						},
 					},
 					"group:marketing": []interface{}{
 						"database",
@@ -229,6 +223,17 @@ func TestExtractConfigList(t *testing.T) {
 								"featureY": map[string]interface{}{
 									"variants": []interface{}{"D", "E"},
 								},
+							},
+						},
+					},
+				},
+				// file: groups2.yaml
+				map[string]interface{}{
+					"group:analytics": []interface{}{
+						"services",
+						map[string]interface{}{
+							"features": map[string]interface{}{
+								"featureX": false,
 							},
 						},
 					},
@@ -379,7 +384,7 @@ func TestExtractConfigList(t *testing.T) {
 						},
 					},
 				},
-				// file: groups.yml
+				// file: groups1.yml
 				map[string]interface{}{
 					"group:analytics": []interface{}{
 						map[string]interface{}{
@@ -390,12 +395,6 @@ func TestExtractConfigList(t *testing.T) {
 							},
 						},
 						"logging",
-						"services",
-						map[string]interface{}{
-							"features": map[string]interface{}{
-								"featureX": false,
-							},
-						},
 					},
 					"group:marketing": []interface{}{
 						"database",
@@ -446,6 +445,17 @@ func TestExtractConfigList(t *testing.T) {
 								"featureY": map[string]interface{}{
 									"variants": []interface{}{"D", "E"},
 								},
+							},
+						},
+					},
+				},
+				// file: groups2.yml
+				map[string]interface{}{
+					"group:analytics": []interface{}{
+						"services",
+						map[string]interface{}{
+							"features": map[string]interface{}{
+								"featureX": false,
 							},
 						},
 					},

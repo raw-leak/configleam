@@ -40,12 +40,17 @@ func (p *configParser) ParseConfigList(repoConfigList *types.ExtractedConfigList
 	for _, config := range *repoConfigList {
 		for key, value := range config {
 			// we store all the keys we are generating in this file
-			parsedCfg.AllKeys = append(parsedCfg.AllKeys, key)
+			if ok := helper.Contains(parsedCfg.AllKeys, key); !ok {
+				parsedCfg.AllKeys = append(parsedCfg.AllKeys, key)
+			}
 
 			if strings.HasPrefix(key, "group:") {
-				groupCfg := types.GroupConfig{
-					Local:  map[string]interface{}{},
-					Global: []string{},
+				groupCfg, ok := parsedCfg.Groups[key]
+				if !ok {
+					groupCfg = types.GroupConfig{
+						Local:  map[string]interface{}{},
+						Global: []string{},
+					}
 				}
 
 				if cfgList, ok := value.([]interface{}); ok {

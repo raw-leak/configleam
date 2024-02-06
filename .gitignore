@@ -1,4 +1,5 @@
 .env
+config.json
 
 build/
 repositories/

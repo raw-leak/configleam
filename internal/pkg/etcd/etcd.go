@@ -8,14 +8,17 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
-type Config struct {
+type EtcdConfig struct {
+	EtcdAddrs    string
+	EtcdUsername string
+	EtcdPassword string
 }
 
 type Etcd struct {
 	Client *clientv3.Client
 }
 
-func New(ctx context.Context, config Config) (*Etcd, error) {
+func New(ctx context.Context, config EtcdConfig) (*Etcd, error) {
 	return nil, nil
 	client, err := clientv3.New(clientv3.Config{})
 	if err != nil {

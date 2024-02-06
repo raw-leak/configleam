@@ -71,3 +71,12 @@ func ExtractRepoNameFromRepoURL(repoURL string) (string, error) {
 
 	return "", fmt.Errorf("could not extract repository name from URL %q", repoURL)
 }
+
+func Contains(arr []string, target string) bool {
+	for _, v := range arr {
+		if v == target {
+			return true
+		}
+	}
+	return false
+}

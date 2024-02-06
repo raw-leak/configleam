@@ -14,41 +14,37 @@ import (
 // The handling of configuration (like polling intervals) can potentially be abstracted out or managed
 // in a more centralized way to allow easier adjustments and scalability.
 
-type configleamService struct {
+type ConfigleamService struct {
 	gitrepos []*gitmanager.GitRepository
 
 	mux          sync.RWMutex
 	pollInterval time.Duration
 	ticker       *time.Ticker
 
-	repository ConfigRepository
+	repository Repository
 	extractor  Extractor
 	parser     Parser
 	analyzer   Analyzer
 }
 
-type ConfigleamRepo struct {
-	Url   string
-	Token string
-}
-
 type ConfigleamServiceConfig struct {
-	Repos []ConfigleamRepo
-	Envs  []string
+	Repos  []string
+	Envs   []string
+	Branch string
 }
 
-func New(cfg ConfigleamServiceConfig, parser Parser, extractor Extractor, repository ConfigRepository, analyzer Analyzer) *configleamService {
+func New(cfg ConfigleamServiceConfig, parser Parser, extractor Extractor, repository Repository, analyzer Analyzer) *ConfigleamService {
 	gitrepos := []*gitmanager.GitRepository{}
 
-	for _, r := range cfg.Repos {
-		repo, err := gitmanager.NewGitRepository(r.Url, "main", r.Token, cfg.Envs)
+	for _, url := range cfg.Repos {
+		repo, err := gitmanager.NewGitRepository(url, cfg.Branch, cfg.Envs)
 		if err != nil {
-			log.Fatalf("Fatal generating %s local git-repository", r.Url)
+			log.Fatalf("Fatal generating '%s' local git-repository", url)
 		}
 		gitrepos = append(gitrepos, repo)
 	}
 
-	return &configleamService{
+	return &ConfigleamService{
 		gitrepos:     gitrepos,
 		pollInterval: 5 * time.Second,
 		mux:          sync.RWMutex{},
@@ -59,18 +55,31 @@ func New(cfg ConfigleamServiceConfig, parser Parser, extractor Extractor, reposi
 	}
 }
 
-func (s *configleamService) Run(ctx context.Context) {
+func (s *ConfigleamService) Run(ctx context.Context) {
 	err := s.cloneAllRemoteRepos(ctx)
 	if err != nil {
 		log.Fatalf(err.Error())
 	}
 
-	s.buildConfigFromLocalRepos(ctx)
+	err = s.buildConfigFromLocalRepos(ctx)
+	if err != nil {
+		log.Fatalf(err.Error())
+	}
 
 	go s.watchRemoteReposForUpdates()
 }
 
-func (s *configleamService) cloneAllRemoteRepos(_ context.Context) error {
+func (s *ConfigleamService) ReadConfig(ctx context.Context, env string, groups, globals []string) (map[string]interface{}, error) {
+	cfg, err := s.repository.ReadConfig(ctx, env, groups, globals)
+	if err != nil {
+		// TODO: log
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
+func (s *ConfigleamService) cloneAllRemoteRepos(_ context.Context) error {
 	for _, gitrepo := range s.gitrepos {
 		err := gitrepo.CloneRemoteRepo()
 		if err != nil {
@@ -81,7 +90,7 @@ func (s *configleamService) cloneAllRemoteRepos(_ context.Context) error {
 	return nil
 }
 
-func (s *configleamService) buildConfigFromLocalRepos(ctx context.Context) error {
+func (s *ConfigleamService) buildConfigFromLocalRepos(ctx context.Context) error {
 	for _, gitrepo := range s.gitrepos {
 		err := s.buildConfigFromLocalRepo(ctx, gitrepo)
 		if err != nil {
@@ -93,7 +102,7 @@ func (s *configleamService) buildConfigFromLocalRepos(ctx context.Context) error
 	return nil
 }
 
-func (s *configleamService) watchRemoteReposForUpdates() {
+func (s *ConfigleamService) watchRemoteReposForUpdates() {
 	s.ticker = time.NewTicker(s.pollInterval)
 
 	for range s.ticker.C {
@@ -107,7 +116,7 @@ func (s *configleamService) watchRemoteReposForUpdates() {
 	}
 }
 
-func (s *configleamService) buildConfigFromLocalRepo(ctx context.Context, gitrepo *gitmanager.GitRepository) error {
+func (s *ConfigleamService) buildConfigFromLocalRepo(ctx context.Context, gitrepo *gitmanager.GitRepository) error {
 	tags, err := gitrepo.PullTagsFromRemoteRepo()
 	if err != nil {
 		log.Println("Error pulling tags:", err)
@@ -132,7 +141,7 @@ func (s *configleamService) buildConfigFromLocalRepo(ctx context.Context, gitrep
 
 		// need to lock the repo from change while extracting the config-list
 		gitrepo.Mux.Lock()
-		configList, err := s.extractor.ExtractConfigList(gitrepo.Dir)
+		configList, err := s.extractor.ExtractConfigList(gitrepo.Dir + "/" + env.Name)
 		gitrepo.Mux.Unlock()
 
 		if err != nil {
@@ -146,19 +155,20 @@ func (s *configleamService) buildConfigFromLocalRepo(ctx context.Context, gitrep
 			return err
 		}
 
-		log.Println("Generated new repo config!", repoConfig)
-
-		err = s.repository.StoreConfig(ctx, repoConfig)
+		log.Printf("Upserting new repo config for environment '%s'", env.Name)
+		err = s.repository.UpsertConfig(ctx, env.Name, gitrepo.Name, repoConfig)
 		if err != nil {
-			log.Println("Error storing config:", err)
+			log.Printf("Error upserting config for environment '%s' with error %v:", env.Name, err)
 			return err
 		}
+
+		gitrepo.SetEnvLatestVersion(ctx, env.Name, env.Tag, env.SemVer)
 	}
 
 	return nil
 }
 
-func (s *configleamService) cleanLocalRepos() {
+func (s *ConfigleamService) cleanLocalRepos() {
 	log.Println("Cleaning local repositories...")
 
 	for _, gitrepo := range s.gitrepos {
@@ -169,7 +179,14 @@ func (s *configleamService) cleanLocalRepos() {
 	}
 }
 
-func (s *configleamService) Shutdown() {
-	s.ticker.Stop()
+func (s *ConfigleamService) Shutdown() {
+	if s.ticker != nil {
+		s.ticker.Stop()
+		s.ticker = nil
+	}
 	s.cleanLocalRepos()
+}
+
+func (s *ConfigleamService) HealthCheck(ctx context.Context) error {
+	return s.repository.HealthCheck(ctx)
 }

@@ -21,14 +21,14 @@ func New() *TagAnalyzer {
 	return &TagAnalyzer{}
 }
 
-func (a *TagAnalyzer) AnalyzeTagsForUpdates(envs []gitmanager.Env, tags []string) ([]EnvUpdate, bool, error) {
+func (a *TagAnalyzer) AnalyzeTagsForUpdates(envs map[string]gitmanager.Env, tags []string) ([]EnvUpdate, bool, error) {
 	envMap := make(map[string]EnvUpdate)
 
 	for _, tag := range tags {
 		log.Println("received this tag", tag)
 
-		for _, env := range envs {
-			if strings.HasSuffix(tag, fmt.Sprintf("-%s", env.Name)) {
+		for envName, env := range envs {
+			if strings.HasSuffix(tag, fmt.Sprintf("-%s", envName)) {
 				semVer, err := helper.ExtractSemanticVersionFromTag(tag)
 				log.Printf("extracted this sem-ver %v from this tag %s\n", envMap, tag)
 
@@ -38,8 +38,8 @@ func (a *TagAnalyzer) AnalyzeTagsForUpdates(envs []gitmanager.Env, tags []string
 				}
 
 				if semVer.IsGreaterThan(env.SemVer) {
-					if v, ok := envMap[env.Name]; !ok || semVer.IsGreaterThan(v.SemVer) {
-						envMap[env.Name] = EnvUpdate{Name: env.Name, Tag: tag, SemVer: semVer}
+					if v, ok := envMap[envName]; !ok || semVer.IsGreaterThan(v.SemVer) {
+						envMap[envName] = EnvUpdate{Name: envName, Tag: tag, SemVer: semVer}
 					}
 				}
 			}

@@ -11,6 +11,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/raw-leak/configleam/internal/app/configleam/helper"
+	"golang.org/x/net/context"
 )
 
 // TODO:
@@ -38,37 +39,38 @@ type Env struct {
 type GitRepository struct {
 	URL      string
 	Branch   string
-	Token    string
+	Name     string
 	Dir      string
 	LastHash string
 	LastTag  string
-	Envs     []Env
+	Envs     map[string]Env
 	Mux      sync.RWMutex
 
 	locRep *git.Repository
 	wt     *git.Worktree
-	auth   *http.BasicAuth
 }
 
 // NewGitRepository creates and initializes a new GitRepository instance.
-func NewGitRepository(repoURL, branch, token string, envs []string) (*GitRepository, error) {
+func NewGitRepository(repoURL, branch string, envs []string) (*GitRepository, error) {
 	repoName, err := helper.ExtractRepoNameFromRepoURL(repoURL)
 	if err != nil {
 		return nil, fmt.Errorf("error extracting repo name: %w", err)
 	}
 
-	envsParam := []Env{}
+	envsParam := map[string]Env{}
 	for _, env := range envs {
-		envsParam = append(envsParam, Env{Name: env})
-	}
-
-	auth := &http.BasicAuth{
-		Username: "username",
-		Password: token,
+		envsParam[env] = Env{Name: env}
 	}
 
 	repoDir := filepath.Join("repositories", repoName)
-	return &GitRepository{URL: repoURL, Branch: branch, Token: token, Dir: repoDir, Envs: envsParam, auth: auth}, nil
+	return &GitRepository{URL: repoURL, Branch: branch, Dir: repoDir, Envs: envsParam, Name: repoName}, nil
+}
+
+func (gr *GitRepository) getAuth() *http.BasicAuth {
+	return &http.BasicAuth{
+		Username: "username",
+		Password: os.Getenv("GIT_ACCESS_TOKEN"),
+	}
 }
 
 // CloneRemoteRepo clones the remote repository.
@@ -81,7 +83,7 @@ func (gr *GitRepository) CloneRemoteRepo() error {
 		URL:           gr.URL,
 		ReferenceName: plumbing.ReferenceName(fmt.Sprintf("refs/heads/%s", gr.Branch)),
 		SingleBranch:  true,
-		Auth:          gr.auth,
+		Auth:          gr.getAuth(),
 	})
 	if err != nil {
 		return fmt.Errorf("error cloning repository: %w", err)
@@ -102,7 +104,7 @@ func (gr *GitRepository) FetchAndCheckout(tag string) error {
 	err := gr.locRep.Fetch(&git.FetchOptions{
 		RemoteName: "origin",
 		RefSpecs:   []config.RefSpec{config.RefSpec(fmt.Sprintf("refs/tags/%s:refs/tags/%s", tag, tag))},
-		Auth:       gr.auth,
+		Auth:       gr.getAuth(),
 	})
 	if err != nil && err != git.NoErrAlreadyUpToDate {
 		return fmt.Errorf("error fetching tag '%s': %w", tag, err)
@@ -139,7 +141,7 @@ func (gr *GitRepository) PullUpdatesFromRemoteRepo() error {
 	gr.Mux.Lock()
 	defer gr.Mux.Unlock()
 
-	err := gr.wt.Pull(&git.PullOptions{RemoteName: "origin", Auth: gr.auth})
+	err := gr.wt.Pull(&git.PullOptions{RemoteName: "origin", Auth: gr.getAuth()})
 	if err != nil && err != git.NoErrAlreadyUpToDate {
 		fmt.Println(err)
 		return fmt.Errorf("error pulling updates: %w", err)
@@ -160,7 +162,7 @@ func (gr *GitRepository) PullTagsFromRemoteRepo() ([]string, error) {
 		RemoteName: "origin",
 		RefSpecs:   []config.RefSpec{"refs/tags/*:refs/tags/*"},
 		Tags:       git.AllTags,
-		Auth:       gr.auth,
+		Auth:       gr.getAuth(),
 	})
 	if err != nil && err != git.NoErrAlreadyUpToDate {
 		return nil, fmt.Errorf("error fetching tags: %w", err)
@@ -183,4 +185,18 @@ func (gr *GitRepository) PullTagsFromRemoteRepo() ([]string, error) {
 	}
 
 	return tags, nil
+}
+
+func (gr *GitRepository) SetEnvLatestVersion(_ context.Context, env string, lastTag string, lastSemVer helper.SemanticVersion) error {
+	gitEnv, ok := gr.Envs[env]
+	if !ok {
+		return fmt.Errorf("error while setting new tag and version for environment '%s'", env)
+	}
+
+	gitEnv.LastTag = lastTag
+	gitEnv.SemVer = lastSemVer
+
+	gr.Envs[env] = gitEnv
+
+	return nil
 }

@@ -49,5 +49,5 @@ help: Makefile
 	@sed -n 's/^##//p' $< | column -t -s ':' |  sed -e 's/^/ /'
 	@echo
 
-.PHONY: build run test fmt clean help
+.PHONY: build test fmt clean help
 

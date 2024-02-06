@@ -10,10 +10,6 @@ type GroupConfig struct {
 }
 
 type ParsedRepoConfig struct {
-	// environment name
-	EnvName string
-	// gir repository name
-	GitRepoName string
 	// need to store all the groups
 	Groups map[string]GroupConfig
 	// need to store all the global variables

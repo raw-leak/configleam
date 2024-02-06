@@ -9,7 +9,7 @@ import (
 )
 
 type Extractor interface {
-	ExtractConfigList(string) (*types.ExtractedConfigList, error)
+	ExtractConfigList(dir string) (*types.ExtractedConfigList, error)
 }
 
 type Parser interface {
@@ -17,11 +17,11 @@ type Parser interface {
 }
 
 type Analyzer interface {
-	AnalyzeTagsForUpdates(envs []gitmanager.Env, tags []string) ([]analyzer.EnvUpdate, bool, error)
+	AnalyzeTagsForUpdates(envs map[string]gitmanager.Env, tags []string) ([]analyzer.EnvUpdate, bool, error)
 }
 
-type ConfigRepository interface {
-	StoreConfig(ctx context.Context, config *types.ParsedRepoConfig) error
-	ReadConfig(ctx context.Context, groups []string, globalKeys []string) (map[string]interface{}, error)
-	DeleteEnvConfigs(ctx context.Context, envName, gitRepoName string) error
+type Repository interface {
+	ReadConfig(ctx context.Context, env string, groups, globalKeys []string) (map[string]interface{}, error)
+	UpsertConfig(ctx context.Context, env string, gitRepoName string, config *types.ParsedRepoConfig) error
+	HealthCheck(ctx context.Context) error
 }

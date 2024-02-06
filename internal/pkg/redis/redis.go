@@ -11,6 +11,7 @@ import (
 type RedisConfig struct {
 	Addr     string
 	Password string
+	Username string
 	DB       int
 }
 
@@ -22,8 +23,9 @@ type Redis struct {
 func New(ctx context.Context, config RedisConfig) (*Redis, error) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     config.Addr,
-		Password: config.Password, // no password set by default
-		DB:       config.DB,       // use default DB
+		Password: config.Password,
+		DB:       config.DB,
+		Username: config.Username,
 	})
 
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)

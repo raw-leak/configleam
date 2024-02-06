@@ -11,11 +11,14 @@ type ConfigRepository struct {
 	etcd *etcd.Etcd
 }
 
-func New(etcd *etcd.Etcd) *ConfigRepository {
+func NewEtcdRepository(etcd *etcd.Etcd) *ConfigRepository {
 	return &ConfigRepository{etcd}
 }
+func (r *ConfigRepository) UpsertConfig(ctx context.Context, env string, gitRepoName string, config *types.ParsedRepoConfig) error {
+	return nil
+}
 
-func (r *ConfigRepository) StoreConfig(ctx context.Context, config *types.ParsedRepoConfig) error {
+func (r *ConfigRepository) storeConfig(ctx context.Context, envName string, gitRepoName string, config *types.ParsedRepoConfig) error {
 	// Start a transaction
 	// txn := r.etcd.Client.Txn(ctx)
 
@@ -33,7 +36,11 @@ func (r *ConfigRepository) StoreConfig(ctx context.Context, config *types.Parsed
 	return nil
 }
 
-func (r *ConfigRepository) ReadConfig(_ context.Context, groups []string, globalKeys []string) (map[string]interface{}, error) {
+func (r *ConfigRepository) ReadConfig(ctx context.Context, env string, groups, globalKeys []string) (map[string]interface{}, error) {
 	// TODO
 	return nil, nil
+}
+
+func (r *ConfigRepository) HealthCheck(ctx context.Context) error {
+	return nil
 }

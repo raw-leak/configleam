@@ -12,7 +12,7 @@ import (
 func TestAnalyzeTagsForUpdates(t *testing.T) {
 	testCases := []struct {
 		name               string
-		envs               []gitmanager.Env
+		envs               map[string]gitmanager.Env
 		tags               []string
 		expectedUpdates    []analyzer.EnvUpdate
 		expectedHasUpdates bool
@@ -20,7 +20,9 @@ func TestAnalyzeTagsForUpdates(t *testing.T) {
 	}{
 		{
 			"No new tags",
-			[]gitmanager.Env{{Name: "develop", LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}}},
+			map[string]gitmanager.Env{
+				"develop": {LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}},
+			},
 			[]string{"v1.0.0-develop"},
 			[]analyzer.EnvUpdate{},
 			false,
@@ -28,7 +30,9 @@ func TestAnalyzeTagsForUpdates(t *testing.T) {
 		},
 		{
 			"Single new tag",
-			[]gitmanager.Env{{Name: "develop", LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}}},
+			map[string]gitmanager.Env{
+				"develop": {LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}},
+			},
 			[]string{"v1.1.0-develop"},
 			[]analyzer.EnvUpdate{{Name: "develop", Tag: "v1.1.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 1, Patch: 0}}},
 			true,
@@ -36,9 +40,9 @@ func TestAnalyzeTagsForUpdates(t *testing.T) {
 		},
 		{
 			"Multiple environments",
-			[]gitmanager.Env{
-				{Name: "develop", LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}},
-				{Name: "staging", LastTag: "v1.0.0-staging", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}},
+			map[string]gitmanager.Env{
+				"develop": {LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}},
+				"staging": {LastTag: "v1.0.0-staging", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}},
 			},
 			[]string{"v1.1.0-develop", "v1.2.0-staging"},
 			[]analyzer.EnvUpdate{
@@ -50,7 +54,9 @@ func TestAnalyzeTagsForUpdates(t *testing.T) {
 		},
 		{
 			"Invalid tag format",
-			[]gitmanager.Env{{Name: "develop", LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}}},
+			map[string]gitmanager.Env{
+				"develop": {LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}},
+			},
 			[]string{"1.1.0-develop"},
 			[]analyzer.EnvUpdate{},
 			false,
@@ -58,7 +64,9 @@ func TestAnalyzeTagsForUpdates(t *testing.T) {
 		},
 		{
 			"New and old tags mixed",
-			[]gitmanager.Env{{Name: "develop", LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}}},
+			map[string]gitmanager.Env{
+				"develop": {LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}},
+			},
 			[]string{"v1.1.0-develop", "v1.0.0-develop"},
 			[]analyzer.EnvUpdate{{"develop", "v1.1.0-develop", helper.SemanticVersion{Major: 1, Minor: 1, Patch: 0}}},
 			true,
@@ -66,7 +74,9 @@ func TestAnalyzeTagsForUpdates(t *testing.T) {
 		},
 		{
 			"Multiple tags, single environment, one new",
-			[]gitmanager.Env{{Name: "develop", LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}}},
+			map[string]gitmanager.Env{
+				"develop": {LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}},
+			},
 			[]string{"v1.1.0-develop", "v1.0.1-develop"},
 			[]analyzer.EnvUpdate{{"develop", "v1.1.0-develop", helper.SemanticVersion{Major: 1, Minor: 1, Patch: 0}}},
 			true,
@@ -74,7 +84,9 @@ func TestAnalyzeTagsForUpdates(t *testing.T) {
 		},
 		{
 			"New tag for unstaged environment",
-			[]gitmanager.Env{{Name: "develop", LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}}},
+			map[string]gitmanager.Env{
+				"develop": {LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}},
+			},
 			[]string{"v1.1.0-feature"},
 			[]analyzer.EnvUpdate{},
 			false,
@@ -82,7 +94,7 @@ func TestAnalyzeTagsForUpdates(t *testing.T) {
 		},
 		{
 			"No environments provided",
-			[]gitmanager.Env{},
+			map[string]gitmanager.Env{},
 			[]string{"v1.1.0-develop"},
 			[]analyzer.EnvUpdate{},
 			false,
@@ -90,7 +102,9 @@ func TestAnalyzeTagsForUpdates(t *testing.T) {
 		},
 		{
 			"Environment with no last tag",
-			[]gitmanager.Env{{Name: "develop", LastTag: "", SemVer: helper.SemanticVersion{Major: 0, Minor: 0, Patch: 0}}},
+			map[string]gitmanager.Env{
+				"develop": {LastTag: "", SemVer: helper.SemanticVersion{Major: 0, Minor: 0, Patch: 0}},
+			},
 			[]string{"v1.0.0-develop"},
 			[]analyzer.EnvUpdate{{"develop", "v1.0.0-develop", helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}}},
 			true,
@@ -98,7 +112,9 @@ func TestAnalyzeTagsForUpdates(t *testing.T) {
 		},
 		{
 			"Tag for an environment with a higher patch version",
-			[]gitmanager.Env{{Name: "develop", LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}}},
+			map[string]gitmanager.Env{
+				"develop": {LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}},
+			},
 			[]string{"v1.0.1-develop"},
 			[]analyzer.EnvUpdate{{"develop", "v1.0.1-develop", helper.SemanticVersion{Major: 1, Minor: 0, Patch: 1}}},
 			true,
@@ -106,9 +122,9 @@ func TestAnalyzeTagsForUpdates(t *testing.T) {
 		},
 		{
 			"Multiple environments, some with no updates",
-			[]gitmanager.Env{
-				{Name: "develop", LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}},
-				{Name: "staging", LastTag: "v1.0.0-staging", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}},
+			map[string]gitmanager.Env{
+				"develop": {LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}},
+				"staging": {LastTag: "v1.0.0-staging", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}},
 			},
 			[]string{"v1.1.0-develop"},
 			[]analyzer.EnvUpdate{{"develop", "v1.1.0-develop", helper.SemanticVersion{Major: 1, Minor: 1, Patch: 0}}},
@@ -117,7 +133,9 @@ func TestAnalyzeTagsForUpdates(t *testing.T) {
 		},
 		{
 			"Tag with higher major version",
-			[]gitmanager.Env{{Name: "develop", LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}}},
+			map[string]gitmanager.Env{
+				"develop": {LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}},
+			},
 			[]string{"v2.0.0-develop"},
 			[]analyzer.EnvUpdate{{"develop", "v2.0.0-develop", helper.SemanticVersion{Major: 2, Minor: 0, Patch: 0}}},
 			true,
@@ -125,7 +143,9 @@ func TestAnalyzeTagsForUpdates(t *testing.T) {
 		},
 		{
 			"Tag with non-numeric version components",
-			[]gitmanager.Env{{Name: "develop", LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}}},
+			map[string]gitmanager.Env{
+				"develop": {LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}},
+			},
 			[]string{"v1.x.y-develop"},
 			[]analyzer.EnvUpdate{},
 			false,
@@ -133,7 +153,9 @@ func TestAnalyzeTagsForUpdates(t *testing.T) {
 		},
 		{
 			"Empty tag list",
-			[]gitmanager.Env{{Name: "develop", LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}}},
+			map[string]gitmanager.Env{
+				"develop": {LastTag: "v1.0.0-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 0}},
+			},
 			[]string{},
 			[]analyzer.EnvUpdate{},
 			false,
@@ -141,10 +163,10 @@ func TestAnalyzeTagsForUpdates(t *testing.T) {
 		},
 		{
 			"Identify Newest Tags from a Set of Old and New Tags",
-			[]gitmanager.Env{
-				{Name: "develop", LastTag: "v1.0.5-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 5}},
-				{Name: "staging", LastTag: "v2.1.5-staging", SemVer: helper.SemanticVersion{Major: 2, Minor: 1, Patch: 5}},
-				{Name: "production", LastTag: "v3.2.5-production", SemVer: helper.SemanticVersion{Major: 3, Minor: 2, Patch: 5}},
+			map[string]gitmanager.Env{
+				"develop":    {LastTag: "v1.0.5-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 5}},
+				"staging":    {LastTag: "v2.1.5-staging", SemVer: helper.SemanticVersion{Major: 2, Minor: 1, Patch: 5}},
+				"production": {LastTag: "v3.2.5-production", SemVer: helper.SemanticVersion{Major: 3, Minor: 2, Patch: 5}},
 			},
 			[]string{
 				// Old tags
@@ -166,9 +188,10 @@ func TestAnalyzeTagsForUpdates(t *testing.T) {
 		},
 		{
 			"Include Invalid Tags and Ensure They Are Skipped",
-			[]gitmanager.Env{
-				{Name: "develop", LastTag: "v1.0.5-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 5}},
-				{Name: "staging", LastTag: "v2.1.5-staging", SemVer: helper.SemanticVersion{Major: 2, Minor: 1, Patch: 5}},
+
+			map[string]gitmanager.Env{
+				"develop": {LastTag: "v1.0.5-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 5}},
+				"staging": {LastTag: "v2.1.5-staging", SemVer: helper.SemanticVersion{Major: 2, Minor: 1, Patch: 5}},
 			},
 			[]string{
 				// Invalid tags

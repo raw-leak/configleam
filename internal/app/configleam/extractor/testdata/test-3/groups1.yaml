@@ -3,9 +3,6 @@ group:analytics:
       primary:
         port: 3310
   - logging
-  - services
-  - features:
-      featureX: false
 
 group:marketing:
   - database
