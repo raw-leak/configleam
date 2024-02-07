@@ -9,10 +9,9 @@ import (
 	"github.com/raw-leak/configleam/internal/app/configleam/gitmanager"
 )
 
-// TODO:
-// 3. Configuration Management:
-// The handling of configuration (like polling intervals) can potentially be abstracted out or managed
-// in a more centralized way to allow easier adjustments and scalability.
+const (
+	PullIntervalDefault = 5 * time.Second
+)
 
 type ConfigleamService struct {
 	gitrepos []*gitmanager.GitRepository
@@ -28,9 +27,10 @@ type ConfigleamService struct {
 }
 
 type ConfigleamServiceConfig struct {
-	Repos  []string
-	Envs   []string
-	Branch string
+	Repos        []string
+	Envs         []string
+	Branch       string
+	PullInterval time.Duration
 }
 
 func New(cfg ConfigleamServiceConfig, parser Parser, extractor Extractor, repository Repository, analyzer Analyzer) *ConfigleamService {
@@ -44,9 +44,13 @@ func New(cfg ConfigleamServiceConfig, parser Parser, extractor Extractor, reposi
 		gitrepos = append(gitrepos, repo)
 	}
 
+	if cfg.PullInterval == 0 {
+		cfg.PullInterval = PullIntervalDefault
+	}
+
 	return &ConfigleamService{
 		gitrepos:     gitrepos,
-		pollInterval: 5 * time.Second,
+		pollInterval: cfg.PullInterval,
 		mux:          sync.RWMutex{},
 		repository:   repository,
 		extractor:    extractor,

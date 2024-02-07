@@ -24,9 +24,10 @@ func (b *Bool) UnmarshalText(text []byte) error {
 }
 
 type Config struct {
-	Port     string `envconfig:"PORT"`
-	Hostname string `envconfig:"HOSTNAME"`
-	RepoType string `envconfig:"REPO_TYPE"`
+	Port         string        `envconfig:"PORT"`
+	Hostname     string        `envconfig:"HOSTNAME"`
+	RepoType     string        `envconfig:"REPO_TYPE"`
+	PullInterval time.Duration `envconfig:"PULL_INTERVAL"`
 
 	RedisAddrs    string `envconfig:"REDIS_ADDRS"`
 	RedisUsername string `envconfig:"REDIS_USERNAME"`

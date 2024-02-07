@@ -29,8 +29,9 @@ func Init(ctx context.Context, cfg *config.Config) (*service.ConfigleamService, 
 	analyzer := analyzer.New()
 
 	return service.New(service.ConfigleamServiceConfig{
-		Branch: cfg.RepoConfig.Branch,
-		Envs:   cfg.RepoConfig.Environments,
-		Repos:  cfg.RepoConfig.Repositories,
+		Branch:       cfg.RepoConfig.Branch,
+		Envs:         cfg.RepoConfig.Environments,
+		Repos:        cfg.RepoConfig.Repositories,
+		PullInterval: cfg.PullInterval,
 	}, parser, extractor, repo, analyzer), nil
 }
