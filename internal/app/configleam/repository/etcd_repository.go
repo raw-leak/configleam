@@ -45,6 +45,11 @@ func (r *ConfigRepository) ReadConfig(ctx context.Context, env string, groups, g
 	return nil, nil
 }
 
+func (r *ConfigRepository) DeleteConfig(ctx context.Context, env, gitRepoName string) error {
+	// TODO
+	return nil
+}
+
 func (r *ConfigRepository) HealthCheck(ctx context.Context) error {
 	return nil
 }

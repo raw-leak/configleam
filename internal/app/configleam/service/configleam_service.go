@@ -32,12 +32,13 @@ type Repository interface {
 	CloneConfig(ctx context.Context, env, newEnv string, updateGlobals map[string]interface{}) error
 	ReadConfig(ctx context.Context, env string, groups, globalKeys []string) (map[string]interface{}, error)
 	UpsertConfig(ctx context.Context, env string, gitRepoName string, config *types.ParsedRepoConfig) error
+	DeleteConfig(ctx context.Context, env string, gitRepoName string) error
 	HealthCheck(ctx context.Context) error
 }
 
 type ConfigleamService struct {
-	gitrepos   []*gitmanager.GitRepository
-	clonedEnvs []string
+	gitrepos []*gitmanager.GitRepository
+	envs     []string
 
 	mux          sync.RWMutex
 	pollInterval time.Duration
@@ -73,7 +74,7 @@ func New(cfg ConfigleamServiceConfig, parser Parser, extractor Extractor, reposi
 
 	return &ConfigleamService{
 		gitrepos:     gitrepos,
-		clonedEnvs:   []string{},
+		envs:         cfg.Envs,
 		pollInterval: cfg.PullInterval,
 		mux:          sync.RWMutex{},
 		repository:   repository,
@@ -213,6 +214,16 @@ func (s *ConfigleamService) Shutdown() {
 		s.ticker = nil
 	}
 	s.cleanLocalRepos()
+}
+
+func (s *ConfigleamService) DeleteConfig(ctx context.Context, deleteEnv string) error {
+	for _, reservedEnv := range s.envs {
+		if reservedEnv == deleteEnv {
+			return fmt.Errorf("env '%s' reserved and can not be deleted", deleteEnv)
+		}
+	}
+
+	return s.repository.DeleteConfig(ctx, deleteEnv, "*")
 }
 
 func (s *ConfigleamService) HealthCheck(ctx context.Context) error {

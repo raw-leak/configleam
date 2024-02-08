@@ -32,7 +32,7 @@ func (r *RedisConfigRepository) storeConfig(ctx context.Context, envName string,
 	pipeline := r.Client.TxPipeline()
 
 	// Base key prefix based on environment and repository
-	// Key: env:repo:configType:configName
+	// Key: <repo>:<env>:global|group:<configKey>
 	baseKeyPrefix := fmt.Sprintf("%s:%s:", gitRepoName, envName)
 
 	// Store global configurations
@@ -67,7 +67,7 @@ func (r *RedisConfigRepository) storeConfig(ctx context.Context, envName string,
 	return nil
 }
 
-func (r *RedisConfigRepository) deleteConfig(ctx context.Context, env, gitRepoName string) error {
+func (r *RedisConfigRepository) DeleteConfig(ctx context.Context, env, gitRepoName string) error {
 	luaScript := `
         local keys = redis.call('keys', ARGV[1])
         for i=1,#keys do
@@ -95,7 +95,7 @@ func (r *RedisConfigRepository) UpsertConfig(ctx context.Context, env string, gi
 	}
 	defer r.Client.Del(ctx, lockKey)
 
-	err = r.deleteConfig(ctx, env, gitRepoName)
+	err = r.DeleteConfig(ctx, env, gitRepoName)
 	if err != nil {
 		return fmt.Errorf("error acquiring lock: %v", err)
 	}
@@ -109,20 +109,20 @@ func (r *RedisConfigRepository) ReadConfig(ctx context.Context, env string, grou
 		return nil, fmt.Errorf("error verifying the lock while reading config for environment '%s': %v", env, err)
 	}
 
-	result := make(map[string]interface{})
-
+	result := map[string]interface{}{}
 	for _, groupName := range groups {
-		// look for: *:develop:group:service-a
+		// look for: *:<env>:group:<groupName>
 		// returns provided group collection from any repository
 		groupKeyPattern := fmt.Sprintf("*:%s:group:%s", env, groupName)
 
 		// keys len could be equal to the amount of repositories connected to the configleam
+		// IMP: there will be a small number of group keys
 		groupKeys, err := r.Client.Keys(ctx, groupKeyPattern).Result()
 		if err != nil {
-			return nil, fmt.Errorf("error fetching keys for group config '%s': %v", groupName, err)
+			return nil, fmt.Errorf("error fetching keys for groups config '%s': %v", groupName, err)
 		}
 
-		groupsConfig := make(map[string]types.GroupConfig)
+		groupsConfig := map[string]types.GroupConfig{}
 		for _, groupKey := range groupKeys {
 			var groupConfig types.GroupConfig
 
@@ -143,13 +143,15 @@ func (r *RedisConfigRepository) ReadConfig(ctx context.Context, env string, grou
 			groupsConfig[groupName] = groupConfig
 		}
 
-		// combine local and referenced global configurations for the group
-		combinedGroupConfig := make(map[string]interface{})
+		// combine local and referenced global configurations for the group (goroutine?)
+		combinedGroupConfig := map[string]interface{}{}
 		for _, groupConfig := range groupsConfig {
+			// IMP: there could be many local keys
 			for localKey, localVal := range groupConfig.Local {
 				combinedGroupConfig[localKey] = localVal
 			}
 
+			// IMP: there could be many global keys (goroutine?)
 			for _, key := range groupConfig.Global {
 				if _, ok := combinedGroupConfig[key]; !ok {
 					// fetch global value if not already fetched
@@ -217,6 +219,7 @@ func (r *RedisConfigRepository) ReadConfig(ctx context.Context, env string, grou
 			if err != nil {
 				return nil, fmt.Errorf("error unmarshalling global config '%s': %v", key, err)
 			}
+
 			result[key] = globalVal
 		}
 	}
@@ -277,7 +280,7 @@ func (r *RedisConfigRepository) CloneConfig(ctx context.Context, cloneEnv, newEn
 
 	_, err := r.Client.Eval(ctx, script, []string{matchPattern}, oldSegment, newSegment).Result()
 	if err != nil {
-		err = r.deleteConfig(ctx, newEnv, "*")
+		err = r.DeleteConfig(ctx, newEnv, "*")
 		log.Fatalf("Error executing Lua script: %v", err)
 		return err
 	} else {
@@ -285,6 +288,7 @@ func (r *RedisConfigRepository) CloneConfig(ctx context.Context, cloneEnv, newEn
 	}
 
 	if len(updateGlobal) > 0 {
+		fmt.Println("CLOnING")
 		pipeline := r.Client.Pipeline()
 
 		for k, v := range updateGlobal {
@@ -292,7 +296,7 @@ func (r *RedisConfigRepository) CloneConfig(ctx context.Context, cloneEnv, newEn
 
 			globalKeys, err := r.Client.Keys(ctx, globalKeyMatchPattern).Result()
 			if err != nil {
-				delErr := r.deleteConfig(ctx, newEnv, "*")
+				delErr := r.DeleteConfig(ctx, newEnv, "*")
 				if delErr != nil {
 					// TODO LOG
 				}
@@ -302,7 +306,7 @@ func (r *RedisConfigRepository) CloneConfig(ctx context.Context, cloneEnv, newEn
 			if len(globalKeys) > 0 {
 				jsonData, err := json.Marshal(v)
 				if err != nil {
-					delErr := r.deleteConfig(ctx, newEnv, "*")
+					delErr := r.DeleteConfig(ctx, newEnv, "*")
 					if delErr != nil {
 						// TODO LOG
 					}
@@ -318,7 +322,7 @@ func (r *RedisConfigRepository) CloneConfig(ctx context.Context, cloneEnv, newEn
 
 		_, err = pipeline.Exec(ctx)
 		if err != nil {
-			delErr := r.deleteConfig(ctx, newEnv, "*")
+			delErr := r.DeleteConfig(ctx, newEnv, "*")
 			if delErr != nil {
 				// TODO LOG
 			}

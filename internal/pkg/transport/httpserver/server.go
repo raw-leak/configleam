@@ -15,7 +15,8 @@ type ConfigleamService interface {
 
 type ConfigleamEndpoints interface {
 	CloneConfigHandler(w http.ResponseWriter, r *http.Request)
-	ReadConfigurationHandler(w http.ResponseWriter, r *http.Request)
+	ReadConfigHandler(w http.ResponseWriter, r *http.Request)
+	DeleteConfigHandler(w http.ResponseWriter, r *http.Request)
 }
 
 type ConfigleamSet interface {
@@ -44,6 +45,7 @@ func (s *httpServer) ListenAndServe(httpAddr string) error {
 	// business handlers
 	mux.HandleFunc("/v1/cfg", s.configleam.Endpoints.ReadConfigurationHandler)
 	mux.HandleFunc("/v1/cfg/clone", s.configleam.Endpoints.CloneConfigHandler)
+	mux.HandleFunc("/v1/cfg/delete", s.configleam.Endpoints.DeleteConfigHandler)
 
 	s.server = &http.Server{Addr: fmt.Sprintf(":%s", httpAddr), Handler: mux}
 

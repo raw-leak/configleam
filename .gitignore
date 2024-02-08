@@ -4,3 +4,5 @@ config.json
 build/
 repositories/
 .vscode/
+
+rest.http
