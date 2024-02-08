@@ -15,7 +15,6 @@ import (
 )
 
 // TODOs:
-// 1. Dynamic environments
 // 2. Dynamic WS notif to the consumers
 // 3. Secrets
 
@@ -34,7 +33,7 @@ func run() error {
 		return err
 	}
 
-	service, err := configleam.Init(ctx, cfg)
+	configleamSet, err := configleam.Init(ctx, cfg)
 	if err != nil {
 		return err
 	}
@@ -53,10 +52,10 @@ func run() error {
 
 		elector, err := leaderelection.New(&leConfig, func() {
 			log.Println("Started leading, starting service...")
-			service.Run(ctx)
+			configleamSet.Service.Run(ctx)
 		}, func() {
 			log.Println("Stopped leading, shutting down service...")
-			service.Shutdown()
+			configleamSet.Service.Shutdown()
 		})
 		if err != nil {
 			return err
@@ -65,10 +64,10 @@ func run() error {
 		go elector.Run(ctx)
 	} else {
 		log.Println("Running without leader election")
-		service.Run(ctx)
+		configleamSet.Service.Run(ctx)
 	}
 
-	httpServer := httpserver.NewHttpTransport(service)
+	httpServer := httpserver.NewHttpTransport(configleamSet)
 
 	errChan := make(chan error, 2)
 	go func() {
@@ -90,7 +89,7 @@ func run() error {
 	}
 
 	if !bool(cfg.EnableLeaderElection) {
-		service.Shutdown()
+		configleamSet.Service.Shutdown()
 	}
 
 	err = httpServer.Shutdown(ctx)

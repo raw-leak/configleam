@@ -5,35 +5,45 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+
+	"github.com/raw-leak/configleam/internal/app/configleam"
 )
 
-type Service interface {
-	CloneConfig(ctx context.Context, env, newEnv string, updateGlobals map[string]interface{}) error
-	ReadConfig(ctx context.Context, env string, groups, globals []string) (map[string]interface{}, error)
+type ConfigleamService interface {
 	HealthCheck(ctx context.Context) error
 }
 
-type httpServer struct {
-	server  *http.Server
-	service Service
+type ConfigleamEndpoints interface {
+	CloneConfigHandler(w http.ResponseWriter, r *http.Request)
+	ReadConfigurationHandler(w http.ResponseWriter, r *http.Request)
 }
 
-func NewHttpTransport(service Service) *httpServer {
-	return &httpServer{service: service}
+type ConfigleamSet interface {
+	ConfigleamService
+	ConfigleamEndpoints
+}
+
+type httpServer struct {
+	server     *http.Server
+	configleam *configleam.ConfigleamSet
+}
+
+func NewHttpTransport(configleam *configleam.ConfigleamSet) *httpServer {
+	return &httpServer{configleam: configleam}
 }
 
 func (s *httpServer) ListenAndServe(httpAddr string) error {
 	mux := http.NewServeMux()
 
-	endpoints := NewEndpoints(s.service)
+	endpoints := newHandlers(s.configleam.Service)
 
 	// register health and readiness handlers
 	mux.HandleFunc("/health", endpoints.HealthCheckHandler)
 	mux.HandleFunc("/ready", endpoints.ReadinessCheckHandler)
 
 	// business handlers
-	mux.HandleFunc("/v1/cfg", endpoints.ReadConfigurationHandler)
-	mux.HandleFunc("/v1/cfg/clone", endpoints.CloneConfigHandler)
+	mux.HandleFunc("/v1/cfg", s.configleam.Endpoints.ReadConfigurationHandler)
+	mux.HandleFunc("/v1/cfg/clone", s.configleam.Endpoints.CloneConfigHandler)
 
 	s.server = &http.Server{Addr: fmt.Sprintf(":%s", httpAddr), Handler: mux}
 
