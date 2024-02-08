@@ -3,6 +3,7 @@ module github.com/raw-leak/configleam
 go 1.21.3
 
 require (
+	github.com/emicklei/go-restful/v3 v3.11.0
 	github.com/emirpasic/gods v1.18.1
 	github.com/go-git/go-git/v5 v5.11.0
 	github.com/joho/godotenv v1.5.1
@@ -27,7 +28,6 @@ require (
 	github.com/cyphar/filepath-securejoin v0.2.4 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
-	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.5.0 // indirect
 	github.com/go-logr/logr v1.3.0 // indirect

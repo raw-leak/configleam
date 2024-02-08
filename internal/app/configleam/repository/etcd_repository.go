@@ -36,6 +36,10 @@ func (r *ConfigRepository) storeConfig(ctx context.Context, envName string, gitR
 	return nil
 }
 
+func (r *ConfigRepository) CloneConfig(ctx context.Context, cloneEnv, newEnv string, updateGlobal map[string]interface{}) error {
+	return nil
+}
+
 func (r *ConfigRepository) ReadConfig(ctx context.Context, env string, groups, globalKeys []string) (map[string]interface{}, error) {
 	// TODO
 	return nil, nil

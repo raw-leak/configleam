@@ -8,6 +8,7 @@ import (
 )
 
 type Service interface {
+	CloneConfig(ctx context.Context, env, newEnv string, updateGlobals map[string]interface{}) error
 	ReadConfig(ctx context.Context, env string, groups, globals []string) (map[string]interface{}, error)
 	HealthCheck(ctx context.Context) error
 }
@@ -27,11 +28,12 @@ func (s *httpServer) ListenAndServe(httpAddr string) error {
 	endpoints := NewEndpoints(s.service)
 
 	// register health and readiness handlers
-	mux.HandleFunc("/healthz", endpoints.HealthCheckHandler)
+	mux.HandleFunc("/health", endpoints.HealthCheckHandler)
 	mux.HandleFunc("/ready", endpoints.ReadinessCheckHandler)
 
 	// business handlers
 	mux.HandleFunc("/v1/cfg", endpoints.ReadConfigurationHandler)
+	mux.HandleFunc("/v1/cfg/clone", endpoints.CloneConfigHandler)
 
 	s.server = &http.Server{Addr: fmt.Sprintf(":%s", httpAddr), Handler: mux}
 

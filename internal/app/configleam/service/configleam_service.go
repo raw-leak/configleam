@@ -2,19 +2,42 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sync"
 	"time"
 
+	"github.com/raw-leak/configleam/internal/app/configleam/analyzer"
 	"github.com/raw-leak/configleam/internal/app/configleam/gitmanager"
+	"github.com/raw-leak/configleam/internal/app/configleam/types"
 )
 
 const (
 	PullIntervalDefault = 5 * time.Second
 )
 
+type Extractor interface {
+	ExtractConfigList(dir string) (*types.ExtractedConfigList, error)
+}
+
+type Parser interface {
+	ParseConfigList(*types.ExtractedConfigList) (*types.ParsedRepoConfig, error)
+}
+
+type Analyzer interface {
+	AnalyzeTagsForUpdates(envs map[string]gitmanager.Env, tags []string) ([]analyzer.EnvUpdate, bool, error)
+}
+
+type Repository interface {
+	CloneConfig(ctx context.Context, env, newEnv string, updateGlobals map[string]interface{}) error
+	ReadConfig(ctx context.Context, env string, groups, globalKeys []string) (map[string]interface{}, error)
+	UpsertConfig(ctx context.Context, env string, gitRepoName string, config *types.ParsedRepoConfig) error
+	HealthCheck(ctx context.Context) error
+}
+
 type ConfigleamService struct {
-	gitrepos []*gitmanager.GitRepository
+	gitrepos   []*gitmanager.GitRepository
+	clonedEnvs []string
 
 	mux          sync.RWMutex
 	pollInterval time.Duration
@@ -50,6 +73,7 @@ func New(cfg ConfigleamServiceConfig, parser Parser, extractor Extractor, reposi
 
 	return &ConfigleamService{
 		gitrepos:     gitrepos,
+		clonedEnvs:   []string{},
 		pollInterval: cfg.PullInterval,
 		mux:          sync.RWMutex{},
 		repository:   repository,
@@ -193,4 +217,32 @@ func (s *ConfigleamService) Shutdown() {
 
 func (s *ConfigleamService) HealthCheck(ctx context.Context) error {
 	return s.repository.HealthCheck(ctx)
+}
+
+func (s *ConfigleamService) CloneConfig(ctx context.Context, cloneEnv, newEnv string, updateGlobals map[string]interface{}) error {
+	var env string
+	var gitrepo *gitmanager.GitRepository
+
+	for _, gr := range s.gitrepos {
+		for _, repoEnv := range gr.Envs {
+			if repoEnv.Name == cloneEnv {
+				gitrepo = gr
+				env = cloneEnv
+			}
+		}
+	}
+
+	if env == "" {
+		return fmt.Errorf("env %s for cloning has not been found", cloneEnv)
+	}
+
+	gitrepo.Mux.Lock()
+	defer gitrepo.Mux.Unlock()
+
+	err := s.repository.CloneConfig(ctx, env, newEnv, updateGlobals)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

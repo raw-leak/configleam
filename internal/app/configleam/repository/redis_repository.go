@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/raw-leak/configleam/internal/app/configleam/types"
@@ -243,6 +244,89 @@ func (r *RedisConfigRepository) checkLockAndRetry(ctx context.Context, env strin
 	}
 
 	return errors.New("timeout waiting for the lock")
+}
+
+func (r *RedisConfigRepository) CloneConfig(ctx context.Context, cloneEnv, newEnv string, updateGlobal map[string]interface{}) error {
+	matchPattern := fmt.Sprintf("*:%s:*", cloneEnv)
+	oldSegment := fmt.Sprintf(":%s:", cloneEnv)
+	newSegment := fmt.Sprintf(":%s:", newEnv)
+
+	script := `local matchPattern = KEYS[1]
+               local oldSegment = ARGV[1]
+               local newSegment = ARGV[2]
+               local cursor = "0"
+               local done = false
+
+               repeat
+                   local result = redis.call("SCAN", cursor, "MATCH", matchPattern)
+                   cursor = result[1]
+                   local keys = result[2]
+
+                   for i, key in ipairs(keys) do
+                       local value = redis.call("GET", key)
+                       local newKey = string.gsub(key, oldSegment, newSegment)
+                       redis.call("SET", newKey, value)
+                   end
+
+                   if cursor == "0" then
+                       done = true
+                   end
+               until done
+
+               return "Keys duplicated successfully"`
+
+	_, err := r.Client.Eval(ctx, script, []string{matchPattern}, oldSegment, newSegment).Result()
+	if err != nil {
+		err = r.deleteConfig(ctx, newEnv, "*")
+		log.Fatalf("Error executing Lua script: %v", err)
+		return err
+	} else {
+		log.Println("Keys duplicated successfully.")
+	}
+
+	if len(updateGlobal) > 0 {
+		pipeline := r.Client.Pipeline()
+
+		for k, v := range updateGlobal {
+			globalKeyMatchPattern := fmt.Sprintf("*:%s:%s:%s", cloneEnv, GlobalPrefix, k)
+
+			globalKeys, err := r.Client.Keys(ctx, globalKeyMatchPattern).Result()
+			if err != nil {
+				delErr := r.deleteConfig(ctx, newEnv, "*")
+				if delErr != nil {
+					// TODO LOG
+				}
+				return err
+			}
+
+			if len(globalKeys) > 0 {
+				jsonData, err := json.Marshal(v)
+				if err != nil {
+					delErr := r.deleteConfig(ctx, newEnv, "*")
+					if delErr != nil {
+						// TODO LOG
+					}
+					return err
+				}
+
+				for _, gk := range globalKeys {
+					newEnvGk := strings.Replace(gk, oldSegment, newSegment, 1)
+					pipeline.Set(ctx, newEnvGk, jsonData, 0)
+				}
+			}
+		}
+
+		_, err = pipeline.Exec(ctx)
+		if err != nil {
+			delErr := r.deleteConfig(ctx, newEnv, "*")
+			if delErr != nil {
+				// TODO LOG
+			}
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (r *RedisConfigRepository) HealthCheck(ctx context.Context) error {
