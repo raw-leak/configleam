@@ -14,10 +14,6 @@ import (
 	"github.com/raw-leak/configleam/internal/pkg/transport/httpserver"
 )
 
-// TODOs:
-// 2. Dynamic WS notif to the consumers
-// 3. Secrets
-
 func main() {
 	if err := run(); err != nil {
 		log.Fatal(err.Error())

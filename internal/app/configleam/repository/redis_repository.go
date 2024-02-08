@@ -112,7 +112,7 @@ func (r *RedisConfigRepository) ReadConfig(ctx context.Context, env string, grou
 	result := make(map[string]interface{})
 
 	for _, groupName := range groups {
-		// look for: *:develop:group:api-core
+		// look for: *:develop:group:service-a
 		// returns provided group collection from any repository
 		groupKeyPattern := fmt.Sprintf("*:%s:group:%s", env, groupName)
 
