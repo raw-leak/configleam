@@ -73,7 +73,7 @@ func (e ConfigleamEndpoints) CloneConfigHandler(w http.ResponseWriter, r *http.R
 	}
 }
 
-func (e ConfigleamEndpoints) ReadConfigurationHandler(w http.ResponseWriter, r *http.Request) {
+func (e ConfigleamEndpoints) ReadConfigHandler(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
 	groups := query["groups"]
@@ -84,7 +84,7 @@ func (e ConfigleamEndpoints) ReadConfigurationHandler(w http.ResponseWriter, r *
 
 	config, err := e.service.ReadConfig(ctx, env, groups, globals)
 	if err != nil {
-		fmt.Println("Error building configuration response:", err)
+		fmt.Println("Error building configuration response:", err.Error())
 		http.Error(w, "Error building configuration response", http.StatusInternalServerError)
 		return
 	}
