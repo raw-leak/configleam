@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/raw-leak/configleam/internal/app/configleam/service"
+	"github.com/raw-leak/configleam/internal/app/configleam-secrets/service"
 	rds "github.com/raw-leak/configleam/internal/pkg/redis"
 )
 
@@ -18,7 +18,7 @@ type RepositoryConfig struct {
 	EtcdPassword string
 }
 
-func New(ctx context.Context, cfg RepositoryConfig) (service.Repository, error) {
+func New(ctx context.Context, cfg RepositoryConfig, encryptor Encryptor) (service.Repository, error) {
 	if cfg.RedisAddrs == "" {
 		return nil, fmt.Errorf("RedisAddress is no provided")
 	}
@@ -32,9 +32,9 @@ func New(ctx context.Context, cfg RepositoryConfig) (service.Repository, error) 
 		return nil, err
 	}
 
-	return NewRedisRepository(redisCli), nil
+	return NewRedisRepository(redisCli, encryptor), nil
 
-	// TODO: add support to ETCD
+	// TODO: add support for ETCD
 	// if cfg.EtcdAddrs == "" {
 	// 	return nil, fmt.Errorf("EtcdAddrs is no provided")
 	// }
@@ -49,5 +49,4 @@ func New(ctx context.Context, cfg RepositoryConfig) (service.Repository, error) 
 	// }
 
 	// return NewEtcdRepository(etcdCli), nil
-
 }

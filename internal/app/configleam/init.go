@@ -13,12 +13,12 @@ import (
 )
 
 type ConfigleamSet struct {
-	Service   *service.ConfigleamService
-	Endpoints *controller.ConfigleamEndpoints
+	*service.ConfigleamService
+	*controller.ConfigleamEndpoints
 }
 
-func Init(ctx context.Context, cfg *config.Config) (*ConfigleamSet, error) {
-	repo, err := repository.New(ctx, cfg.RepoType, repository.RepositoryConfig{
+func Init(ctx context.Context, cfg *config.Config, secrets service.Secrets) (*ConfigleamSet, error) {
+	repo, err := repository.New(ctx, repository.RepositoryConfig{
 		RedisAddrs:    cfg.RedisAddrs,
 		RedisUsername: cfg.RedisUsername,
 		RedisPassword: cfg.RedisPassword,
@@ -40,11 +40,11 @@ func Init(ctx context.Context, cfg *config.Config) (*ConfigleamSet, error) {
 		Envs:         cfg.RepoConfig.Environments,
 		Repos:        cfg.RepoConfig.Repositories,
 		PullInterval: cfg.PullInterval,
-	}, parser, extractor, repo, analyzer)
+	}, parser, extractor, repo, analyzer, secrets)
 
 	endpoints := controller.New(service)
 
 	return &ConfigleamSet{
-		Service: service, Endpoints: endpoints,
+		service, endpoints,
 	}, nil
 }

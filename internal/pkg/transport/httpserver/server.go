@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-
-	"github.com/raw-leak/configleam/internal/app/configleam"
 )
+
+type ConfigleamSet interface {
+	ConfigleamService
+	ConfigleamEndpoints
+}
 
 type ConfigleamService interface {
 	HealthCheck(ctx context.Context) error
@@ -19,33 +22,45 @@ type ConfigleamEndpoints interface {
 	DeleteConfigHandler(w http.ResponseWriter, r *http.Request)
 }
 
-type ConfigleamSet interface {
-	ConfigleamService
-	ConfigleamEndpoints
+type ConfigleamSecretsSet interface {
+	ConfigleamSecretsService
+	ConfigleamSecretsEndpoints
+}
+
+type ConfigleamSecretsEndpoints interface {
+	UpsertSecretsHandler(w http.ResponseWriter, r *http.Request)
+}
+
+type ConfigleamSecretsService interface {
+	UpsertSecrets(ctx context.Context, env string, secrets map[string]interface{}) error
 }
 
 type httpServer struct {
-	server     *http.Server
-	configleam *configleam.ConfigleamSet
+	server            *http.Server
+	configleam        ConfigleamSet
+	configleamSecrets ConfigleamSecretsSet
 }
 
-func NewHttpTransport(configleam *configleam.ConfigleamSet) *httpServer {
-	return &httpServer{configleam: configleam}
+func NewHttpTransport(configleam ConfigleamSet, configleamSecrets ConfigleamSecretsSet) *httpServer {
+	return &httpServer{configleam: configleam, configleamSecrets: configleamSecrets}
 }
 
 func (s *httpServer) ListenAndServe(httpAddr string) error {
 	mux := http.NewServeMux()
 
-	endpoints := newHandlers(s.configleam.Service)
+	endpoints := newHandlers(s.configleam)
 
 	// register health and readiness handlers
 	mux.HandleFunc("/health", endpoints.HealthCheckHandler)
 	mux.HandleFunc("/ready", endpoints.ReadinessCheckHandler)
 
-	// business handlers
-	mux.HandleFunc("/v1/cfg", s.configleam.Endpoints.ReadConfigurationHandler)
-	mux.HandleFunc("/v1/cfg/clone", s.configleam.Endpoints.CloneConfigHandler)
-	mux.HandleFunc("/v1/cfg/delete", s.configleam.Endpoints.DeleteConfigHandler)
+	// configleam repo business handlers
+	mux.HandleFunc("/v1/cfg", s.configleam.ReadConfigHandler)
+	mux.HandleFunc("/v1/cfg/clone", s.configleam.CloneConfigHandler)
+	mux.HandleFunc("/v1/cfg/delete", s.configleam.DeleteConfigHandler)
+
+	// configleam secrets business handlers
+	mux.HandleFunc("/v1/secrets", s.configleamSecrets.UpsertSecretsHandler)
 
 	s.server = &http.Server{Addr: fmt.Sprintf(":%s", httpAddr), Handler: mux}
 

@@ -16,6 +16,10 @@ const (
 	PullIntervalDefault = 5 * time.Second
 )
 
+type Secrets interface {
+	InsertSecrets(ctx context.Context, env string, cfg *map[string]interface{}) error
+}
+
 type Extractor interface {
 	ExtractConfigList(dir string) (*types.ExtractedConfigList, error)
 }
@@ -48,6 +52,7 @@ type ConfigleamService struct {
 	extractor  Extractor
 	parser     Parser
 	analyzer   Analyzer
+	secrets    Secrets
 }
 
 type ConfigleamServiceConfig struct {
@@ -57,7 +62,7 @@ type ConfigleamServiceConfig struct {
 	PullInterval time.Duration
 }
 
-func New(cfg ConfigleamServiceConfig, parser Parser, extractor Extractor, repository Repository, analyzer Analyzer) *ConfigleamService {
+func New(cfg ConfigleamServiceConfig, parser Parser, extractor Extractor, repository Repository, analyzer Analyzer, secrets Secrets) *ConfigleamService {
 	gitrepos := []*gitmanager.GitRepository{}
 
 	for _, url := range cfg.Repos {
@@ -81,6 +86,7 @@ func New(cfg ConfigleamServiceConfig, parser Parser, extractor Extractor, reposi
 		extractor:    extractor,
 		parser:       parser,
 		analyzer:     analyzer,
+		secrets:      secrets,
 	}
 }
 
@@ -101,7 +107,11 @@ func (s *ConfigleamService) Run(ctx context.Context) {
 func (s *ConfigleamService) ReadConfig(ctx context.Context, env string, groups, globals []string) (map[string]interface{}, error) {
 	cfg, err := s.repository.ReadConfig(ctx, env, groups, globals)
 	if err != nil {
-		// TODO: log
+		return nil, err
+	}
+
+	err = s.secrets.InsertSecrets(ctx, env, &cfg)
+	if err != nil {
 		return nil, err
 	}
 
