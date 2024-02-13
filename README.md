@@ -1,40 +1,157 @@
-# Configleam
+# Configleam 
 
-Configleam is an open-source project aimed at providing a dynamic and efficient way to manage and synchronize configuration files for microservices. It is designed to work natively within Kubernetes environments, leveraging Git repositories for storing and retrieving configurations.
+Configleam is an open-source project aimed at providing a dynamic, simple, and efficient way to manage and synchronize configuration files for microservices. It is designed to work natively within Kubernetes environments, leveraging Git repositories for storing and retrieving configurations.
 
 ## Table of Contents
 
 - [Status](#status)
 - [Installation](#installation)
 - [Usage](#usage)
-  - [Configuration of dedicated git repository](#configuration-of-dedicated-git-repository)
+- [Configuration Repository Structure](#configuration-repository-structure)
 - [Contributing](#contributing)
+- [Kubernetes Integration](#kubernetes-integration)
 - [License](#license)
 - [Contact](#contact)
 
 ## Status
 
-This project is currently `in-progress``. I am actively developing its core features and invite contributions and feedback from the community.
+This project is currently `in-progress`. I am actively developing its core features and invite contributions and feedback from the community.
 
 ## Installation
 
 Instructions on how to install and set up configleam will be provided as the project matures. For now, you can clone the repository to keep track of the latest developments.
 
 ```bash
-git clone https://github.com/yourusername/configleam.git
+git clone https://github.com/raw-leak/configleam.git
 cd configleam
-# Future installation steps will be added here.
 ```
 
 ## Usage
 
-// TODO
+Configleam utilizes a Makefile for simplifying various development tasks. Below are the commands available for managing the project's development process:
 
-### Configuration of dedicated git repository
+<details>
+<summary>More on Usage</summary>
 
-Configleam is designed to manage service configurations efficiently, with a focus on grouping related settings for easy access and management. It distinguishes between global configurations, which are broadly applicable, and local configurations, which are specific to and contained within named groups.
+### Building the Project
 
-#### Configuration Types
+To compile the Configleam application and create a binary in the `./build` directory, use:
+
+```bash
+make build
+```
+
+This command compiles the application, ensuring that any changes to the source code are incorporated into the executable.
+
+### Running the Application
+
+After building, you can run Configleam in development mode with:
+
+```bash
+make run
+```
+
+This command first builds the project and then executes the compiled binary, starting the application.
+
+### Running Tests
+
+To execute the unit tests for Configleam, ensuring that your changes haven't broken existing functionality, use:
+
+```bash
+make test
+```
+
+This command runs all unit tests in the project, providing test results for each package.
+
+### Formatting Code
+
+To format the Go source files according to the Go standards, run:
+
+```bash
+make fmt
+```
+
+This ensures consistency in coding style across the project, making it easier to read and maintain.
+
+### Cleaning Up
+
+To clean up the project, removing build artifacts and clearing the build cache, execute:
+
+```bash
+make clean
+```
+
+This is useful for ensuring a clean state before a fresh build or after finishing development sessions.
+
+### Getting Help
+
+For a summary of available make commands, you can use:
+
+```bash
+make help
+```
+
+This will display a list of all commands defined in the Makefile with a brief description of what they do, helping you to quickly find the command you need.
+
+</details>
+
+## Kubernetes Integration
+
+When deployed in a Kubernetes (k8s) environment, Configleam is designed to operate efficiently in a multi-instance setup. This architecture not only boosts availability but also ensures seamless configuration management across instances.
+
+<details>
+<summary>More on Kubernetes Integration</summary>
+
+### Multi-Instance Deployment
+
+Configleam can be run in multiple instances within Kubernetes, supporting high availability and scalability. This setup allows for a distributed operation where instances share the load of serving configuration data.
+
+### Leader and Replica Roles
+
+- **Leader Instance:** Among the multiple instances, only the elected leader manages the synchronization with the configuration Git repository. This centralizes the update process, ensuring consistency across configurations.
+- **Read Replicas:** Other instances act as read replicas, serving configuration data without performing synchronization tasks. This division of labor ensures efficient resource utilization and quick response times for configuration requests.
+
+### Failover and Leader Election
+
+- **Automatic Failover:** If the current leader instance fails or becomes unavailable, Kubernetes' leader election protocol automatically elects a new leader from the available replicas. This ensures that the synchronization process is always maintained, minimizing downtime and disruption.
+- **Seamless Transition:** The newly elected leader initiates the synchronization with the provided Git repositories, ensuring that the latest configurations are fetched and applied. This transition happens automatically, ensuring continuous operation without manual intervention.
+
+### Endpoints for Health and Readiness Checks
+
+- **Health Check Endpoint:** `/health` allows Kubernetes to monitor the overall health of each Configleam instance, facilitating automatic recovery in case of failures.
+- **Readiness Check Endpoint:** `/ready` signals to Kubernetes when an instance is ready to serve traffic, ensuring that only fully initialized instances handle requests.
+
+By leveraging Kubernetes' capabilities for leader election and automatic failover, Configleam achieves a resilient and scalable configuration management solution suitable for dynamic cloud-native environments. This setup ensures that configuration synchronization is always active and up-to-date, even in the face of instance failures, providing a robust foundation for microservices architecture.
+
+</details>
+
+## Configuration Repository Structure
+
+The configuration repository is the heart of Configleam, storing all the configuration files needed for your microservices. It is organized in a way that supports multiple environments and flexible configuration declaration.
+
+<details>
+<summary>More on Configuration Repository Structure</summary>
+
+### Environment Organization
+
+Configurations are organized by environment, with each environment represented by a separate folder at the root of the repository. For example:
+
+- `/develop`
+- `/release`
+- `/production`
+
+These folders correspond to the environments in which your microservices will run. The name of each folder could perfectly match the environment variable used when running your microservices.
+
+### Declaring Configuration Variables
+
+Within each environment folder, you can declare your configuration variables in `.yaml` or `.yml` files. These files can be organized as you see fit, including the use of nested folders for additional structure. The key points to remember are:
+
+- **File Format:** Ensure your configuration files are in YAML format, with proper syntax to avoid parsing errors.
+- **Flexibility:** You can create as many files as you need, containing as many variables as necessary to suit your configuration requirements.
+
+### Configuration Keys
+
+Configurations are categorized into three types of keys to provide clarity and control over how settings are applied:
 
 1. **Global:**
     - Broadly applicable settings across different contexts.
@@ -51,11 +168,10 @@ Configleam is designed to manage service configurations efficiently, with a focu
     - Context-specific settings contained within a group.
     - Local configurations only exist within the context of their respective groups and are used to override global settings or add new group-specific settings.
 
-#### Example Configurations
-##### Global Configurations
+Here's an example of how these keys might be structured in your YAML files:
 
 ```yaml
-# Example of global configurations
+# Example of global configurations (global.yaml)
 
 database:
   type: sql
@@ -70,24 +186,24 @@ featureFlags:
 In this example:
 `database` and `featureFlags` are global configurations. They define the default database settings and application-wide feature flags.
 
-#### Group Configurations
 ```yaml
-# Example of group configurations with both global and local variables
+# Example of group configurations with both global and local variables (groups.yaml)
 
 group:analytics:
-  - featureFlags
-  - database: 
+  - featureFlags # global
+  - database: # local
       host: analytics-db-host
       port: 3307
-  - additionalMetrics: true
+  - additionalMetrics: true # local
 
 group:marketing:
-  - database
-  - featureFlags:
+  - database # local
+  - featureFlags: # local
       betaFeatures: true
-  - marketingCampaignsEnabled: true
+  - marketingCampaignsEnabled: true # local
 
 ```
+
 In this example: 
 
 Analytics Group (`group:analytics`): Inherits the global featureFlags and modifies the global database settings for its specific needs. It also includes an analytics-specific setting additionalMetrics.
@@ -100,15 +216,15 @@ Marketing Group (`group:marketing:`): Inherits the global database configuration
 - Local configurations allow for flexibility and customization within specific groups or contexts.
 - Configleam processes these configurations to apply the appropriate settings based on their global or group-specific nature.
 
+</details>
+
 ## Contributing
 
-Your contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make to configleam are **greatly appreciated**.
+Contributions are welcome! Please see the [Contribution Guidelines](CONTRIBUTING.md) for more information.
 
-1. Fork the project
-2. Create your feature branch (`git checkout -b feature/YourFeature`)
-3. Commit your changes (`git commit -m 'Add some YourFeature'`)
-4. Push to the branch (`git push origin feature/YourFeature`)
-5. Open a pull request
+## Bug Reports and Feature Requests
+
+Please report any issues or feature requests on the [Issue Tracker](https://github.com/raw-lean/configleam/issues).
 
 ## License
 
