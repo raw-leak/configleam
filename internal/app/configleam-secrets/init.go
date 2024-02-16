@@ -5,7 +5,6 @@ import (
 
 	"github.com/raw-leak/configleam/config"
 	"github.com/raw-leak/configleam/internal/app/configleam-secrets/controller"
-	"github.com/raw-leak/configleam/internal/app/configleam-secrets/encryptor"
 	"github.com/raw-leak/configleam/internal/app/configleam-secrets/repository"
 	"github.com/raw-leak/configleam/internal/app/configleam-secrets/service"
 )
@@ -15,13 +14,7 @@ type ConfigleamSecretsSet struct {
 	*controller.ConfigleamSecretsEndpoints
 }
 
-func Init(ctx context.Context, cfg *config.Config) (*ConfigleamSecretsSet, error) {
-	encryptor, err := encryptor.NewEncryptor("")
-	if err != nil {
-		return nil, err
-
-	}
-
+func Init(ctx context.Context, cfg *config.Config, encryptor repository.Encryptor) (*ConfigleamSecretsSet, error) {
 	repo, err := repository.New(ctx, repository.RepositoryConfig{
 		RedisAddrs:    cfg.RedisAddrs,
 		RedisUsername: cfg.RedisUsername,

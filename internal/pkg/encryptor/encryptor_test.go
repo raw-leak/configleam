@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/raw-leak/configleam/internal/app/configleam-secrets/encryptor"
+	"github.com/raw-leak/configleam/internal/pkg/encryptor"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -48,7 +48,7 @@ func (suite *ConfigleamSecretsSuite) TestEncryptDecrypt() {
 				"age": 30,
 				"address": {
 					"street": "123 Main St",
-					"city": "Anytown",
+					"city": "town",
 					"state": "CA"
 				},
 				"pets": [
