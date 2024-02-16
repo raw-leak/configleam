@@ -7,11 +7,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/raw-leak/configleam/internal/app/configleam-secrets/encryptor"
 	"github.com/raw-leak/configleam/internal/app/configleam-secrets/repository"
+	"github.com/raw-leak/configleam/internal/pkg/encryptor"
 	rds "github.com/raw-leak/configleam/internal/pkg/redis"
 	"github.com/redis/go-redis/v9"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -48,7 +47,7 @@ func (suite *RedisConfigleamSecretsRepositorySuite) TearDownSuite() {
 
 func (suite *RedisConfigleamSecretsRepositorySuite) BeforeTest(testName string) {
 	err := suite.client.FlushAll(context.Background()).Err()
-	assert.NoErrorf(suite.T(), err, "Flushing all data from redis before each test within the test: %s", testName)
+	suite.Require().NoErrorf(err, "Flushing all data from redis before each test within the test: %s", testName)
 }
 
 func (suite *RedisConfigleamSecretsRepositorySuite) TestGetSecret() {

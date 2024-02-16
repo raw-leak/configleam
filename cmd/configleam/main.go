@@ -10,8 +10,11 @@ import (
 
 	"github.com/raw-leak/configleam/config"
 	"github.com/raw-leak/configleam/internal/app/configleam"
+	configleamaccess "github.com/raw-leak/configleam/internal/app/configleam-access"
 	configleamsecrets "github.com/raw-leak/configleam/internal/app/configleam-secrets"
+	"github.com/raw-leak/configleam/internal/pkg/encryptor"
 	"github.com/raw-leak/configleam/internal/pkg/leaderelection"
+	"github.com/raw-leak/configleam/internal/pkg/permissions"
 	"github.com/raw-leak/configleam/internal/pkg/transport/httpserver"
 )
 
@@ -30,7 +33,19 @@ func run() error {
 		return err
 	}
 
-	configleamSecretsSet, err := configleamsecrets.Init(ctx, cfg)
+	perms := permissions.New()
+	encryptor, err := encryptor.NewEncryptor("")
+	if err != nil {
+		return err
+
+	}
+
+	configleamAccessSet, err := configleamaccess.Init(ctx, cfg, encryptor, perms)
+	if err != nil {
+		return err
+	}
+
+	configleamSecretsSet, err := configleamsecrets.Init(ctx, cfg, encryptor)
 	if err != nil {
 		return err
 	}
@@ -69,7 +84,7 @@ func run() error {
 		configleamSet.Run(ctx)
 	}
 
-	httpServer := httpserver.NewHttpTransport(configleamSet, configleamSecretsSet)
+	httpServer := httpserver.NewHttpServer(configleamSet, configleamSecretsSet, configleamAccessSet, perms)
 
 	errChan := make(chan error, 2)
 	go func() {

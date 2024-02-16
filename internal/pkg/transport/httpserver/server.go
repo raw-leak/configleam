@@ -5,44 +5,22 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+
+	p "github.com/raw-leak/configleam/internal/pkg/permissions"
 )
 
-type ConfigleamSet interface {
-	ConfigleamService
-	ConfigleamEndpoints
-}
-
-type ConfigleamService interface {
-	HealthCheck(ctx context.Context) error
-}
-
-type ConfigleamEndpoints interface {
-	CloneConfigHandler(w http.ResponseWriter, r *http.Request)
-	ReadConfigHandler(w http.ResponseWriter, r *http.Request)
-	DeleteConfigHandler(w http.ResponseWriter, r *http.Request)
-}
-
-type ConfigleamSecretsSet interface {
-	ConfigleamSecretsService
-	ConfigleamSecretsEndpoints
-}
-
-type ConfigleamSecretsEndpoints interface {
-	UpsertSecretsHandler(w http.ResponseWriter, r *http.Request)
-}
-
-type ConfigleamSecretsService interface {
-	UpsertSecrets(ctx context.Context, env string, secrets map[string]interface{}) error
-}
-
 type httpServer struct {
-	server            *http.Server
+	server *http.Server
+
 	configleam        ConfigleamSet
 	configleamSecrets ConfigleamSecretsSet
+	configleamAccess  ConfigleamAccessSet
+
+	permissions PermissionsBuilder
 }
 
-func NewHttpTransport(configleam ConfigleamSet, configleamSecrets ConfigleamSecretsSet) *httpServer {
-	return &httpServer{configleam: configleam, configleamSecrets: configleamSecrets}
+func NewHttpServer(configleam ConfigleamSet, configleamSecrets ConfigleamSecretsSet, configleamAccess ConfigleamAccessSet, permissions PermissionsBuilder) *httpServer {
+	return &httpServer{configleam: configleam, configleamSecrets: configleamSecrets, configleamAccess: configleamAccess, permissions: permissions}
 }
 
 func (s *httpServer) ListenAndServe(httpAddr string) error {
@@ -54,13 +32,27 @@ func (s *httpServer) ListenAndServe(httpAddr string) error {
 	mux.HandleFunc("/health", endpoints.HealthCheckHandler)
 	mux.HandleFunc("/ready", endpoints.ReadinessCheckHandler)
 
-	// configleam repo business handlers
-	mux.HandleFunc("/v1/cfg", s.configleam.ReadConfigHandler)
-	mux.HandleFunc("/v1/cfg/clone", s.configleam.CloneConfigHandler)
-	mux.HandleFunc("/v1/cfg/delete", s.configleam.DeleteConfigHandler)
+	// middlewares
+	auth := NewAuthMiddleware(s.configleamAccess, s.permissions)
 
-	// configleam secrets business handlers
-	mux.HandleFunc("/v1/secrets", s.configleamSecrets.UpsertSecretsHandler)
+	// TODO migrate to go 1.22
+
+	// rad configuration business handlers
+	mux.HandleFunc("/v1/config", auth.Guard(p.ReadConfig)(s.configleam.ReadConfigHandler))
+
+	// clone environment business handlers
+	mux.HandleFunc("/v1/config/clone", auth.Guard(p.CloneEnvironment)(s.configleam.CloneConfigHandler))
+	mux.HandleFunc("/v1/config/clone/delete", auth.Guard(p.CloneEnvironment)(s.configleam.DeleteConfigHandler))
+
+	// secrets business handlers
+	mux.HandleFunc("/v1/secrets", auth.Guard(p.CreateSecrets)(s.configleamSecrets.UpsertSecretsHandler))
+
+	// configleam access business handlers
+	mux.HandleFunc("/v1/access", auth.Guard(p.Admin)(s.configleamAccess.GenerateAccessKeyHandler))
+	mux.HandleFunc("/v1/access/delete", auth.Guard(p.Admin)(s.configleamAccess.DeleteAccessKeysHandler))
+
+	// dashboard business handlers
+	// TODO
 
 	s.server = &http.Server{Addr: fmt.Sprintf(":%s", httpAddr), Handler: mux}
 

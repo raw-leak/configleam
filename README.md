@@ -8,6 +8,7 @@ Configleam is an open-source project aimed at providing a dynamic, simple, and e
 - [Installation](#installation)
 - [Usage](#usage)
 - [Configuration Repository Structure](#configuration-repository-structure)
+- [Security](#security)
 - [Contributing](#contributing)
 - [Kubernetes Integration](#kubernetes-integration)
 - [License](#license)
@@ -215,6 +216,130 @@ Marketing Group (`group:marketing:`): Inherits the global database configuration
 - Global configurations act as default settings. They apply broadly unless overridden by a group-specific configuration.
 - Local configurations allow for flexibility and customization within specific groups or contexts.
 - Configleam processes these configurations to apply the appropriate settings based on their global or group-specific nature.
+
+</details>
+
+## Security
+
+Configleam implements granular permissions to provide precise control over user actions within Configleam. Each endpoint is guarded by an authorization header ("X-Access-Key"), ensuring that only authenticated users with valid access keys can access the system. Additionally, we've implemented endpoints accessible exclusively for administrators to generate and delete access keys.
+
+<details>
+<summary>More on Security</summary>
+
+#### Granular Permissions
+
+Granular permissions are at the core of our security model, allowing us to precisely control user access within Configleam. Each permission corresponds to a specific operation within the system, ensuring that users only have access to the features and functionalities they require.
+
+- **Admin Role:**
+  - Description: The admin role grants users global administrative privileges, enabling them to perform all operations across all environments within Configleam.
+  - Permissions:
+    - `Admin` - Global admin role with access to all operations in all environments.
+
+- **Environment Admin Access:**
+  - Description: Similar to the admin role, but restricted to a single environment, providing global administrative privileges within that specific environment.
+  - Permissions:
+    - `EnvAdminAccess` - Admin role but limited to a single environment.
+
+- **Read Configuration:**
+  - Description: Allows users to read configuration settings from Configleam.
+  - Permissions:
+    - `ReadConfig` - Permission to read configurations.
+
+- **Reveal Secrets:**
+  - Description: Grants users the ability to reveal secrets within configuration readings (not yet implemented).
+  - Permissions:
+    - `RevealSecrets` - Permission to reveal secrets in configurations.
+
+- **Clone Environment:**
+  - Description: Permits users to clone existing environments with modifications and delete them.
+  - Permissions:
+    - `CloneEnvironment` - Permission to clone environments.
+
+- **Create Secrets:**
+  - Description: Enables users to create secrets within Configleam.
+  - Permissions:
+    - `CreateSecrets` - Permission to create secrets.
+
+- **Access Dashboard:**
+  - Description: Provides users with access to the dashboard (currently not implemented).
+  - Permissions:
+    - `AccessDashboard` - Permission to access the dashboard.
+
+#### Access Key Management Endpoints
+
+To facilitate access key management, we've introduced dedicated endpoints that enable users to create and delete access keys securely.
+
+- **Create Access Key:**
+  - Endpoint: `POST/PUT /v1/access`
+  - Description: This endpoint allows users to create or update access keys with specified permissions. Below is an example JSON payload for creating access keys:
+
+```json
+{
+  "globalAdmin": true,
+  "environments": {
+    "dev": {
+      "envAdminAccess": true,
+      "readConfig": true,
+      "revealSecrets": false,
+      "cloneEnvironment": false,
+      "createSecrets": true,
+      "accessDashboard": false
+    },
+    "prod": {
+      "envAdminAccess": false,
+      "readConfig": true,
+      "revealSecrets": false,
+      "cloneEnvironment": false,
+      "createSecrets": false,
+      "accessDashboard": true
+    }
+  }
+}
+```
+
+Explanation of JSON properties:
+- `globalAdmin`: Boolean indicating whether the access key has global administrative privileges.
+- `environments`: Map containing permissions for each environment.
+  - `envAdminAccess`: Boolean indicating admin access restricted to the environment.
+  - `readConfig`: Boolean indicating permission to read configurations.
+  - `revealSecrets`: Boolean indicating permission to reveal secrets.
+  - `cloneEnvironment`: Boolean indicating permission to clone environments.
+  - `createSecrets`: Boolean indicating permission to create secrets.
+  - `accessDashboard`: Boolean indicating permission to access the dashboard.
+
+Response Example:
+
+```json
+{
+  "globalAdmin": true,
+  "environments": {
+    "dev": {
+      "envAdminAccess": true,
+      "readConfig": true,
+      "revealSecrets": false,
+      "cloneEnvironment": false,
+      "createSecrets": true,
+      "accessDashboard": false
+    },
+    "prod": {
+      "envAdminAccess": false,
+      "readConfig": true,
+      "revealSecrets": false,
+      "cloneEnvironment": false,
+      "createSecrets": false,
+      "accessDashboard": true
+    }
+  },
+  "accessKey": "generated-access-key"
+}
+```
+
+`accessKey`: The newly generated access key that is associated with the provided permissions.
+
+- **Delete Access Key:**
+  - Endpoint: `ANY /v1/access/delete`
+  - Description: This endpoint allows administrators to delete access keys.
+
 
 </details>
 
