@@ -11,6 +11,7 @@ import (
 	"github.com/raw-leak/configleam/config"
 	"github.com/raw-leak/configleam/internal/app/configleam"
 	configleamaccess "github.com/raw-leak/configleam/internal/app/configleam-access"
+	configleamdashboard "github.com/raw-leak/configleam/internal/app/configleam-dashboard"
 	configleamsecrets "github.com/raw-leak/configleam/internal/app/configleam-secrets"
 	"github.com/raw-leak/configleam/internal/pkg/encryptor"
 	"github.com/raw-leak/configleam/internal/pkg/leaderelection"
@@ -55,6 +56,11 @@ func run() error {
 		return err
 	}
 
+	configleamDashboardSet, err := configleamdashboard.Init(ctx, cfg, configleamAccessSet.ConfigleamAccess,configleamSet.ConfigleamService)
+	if err != nil {
+		return err
+	}
+
 	if bool(cfg.EnableLeaderElection) {
 		log.Println("Running with leader election")
 
@@ -84,7 +90,7 @@ func run() error {
 		configleamSet.Run(ctx)
 	}
 
-	httpServer := httpserver.NewHttpServer(configleamSet, configleamSecretsSet, configleamAccessSet, perms)
+	httpServer := httpserver.NewHttpServer(configleamSet, configleamSecretsSet, configleamAccessSet, configleamDashboardSet, perms)
 
 	errChan := make(chan error, 2)
 	go func() {

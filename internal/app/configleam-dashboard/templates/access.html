@@ -1,0 +1,61 @@
+{{ define "access.html" }}
+<sid class="access-header">
+    <h2 class="access-header-title">Access Keys</h2>
+    <button class="new-token-btn" data-hx-get="access/create/params" hx-target="#access-content">New Access
+        Key</button>
+</sid>
+
+<hr />
+
+<div id="access-content">
+    <div class="access-tokens">
+        <table>
+            <tr>
+                <th>Name</th>
+                <th>Access Key</th>
+                <th>Creation date</th>
+                <th>Expiration date</th>
+                <th>Actions</th>
+            </tr>
+            {{range $index, $item := .Items}}
+            <tr id="access-key-index-{{ $index }}">
+                <td>{{.Name}}</td>
+                <td>{{.MaskedKey}}</td>
+                <td>{{.CreationDate}}</td>
+                <td>{{.ExpirationDate}}</td>
+                <td class="token-actions">
+                    <button class="delete-btn" hx-post="access/delete?key={{ .Key }}"
+                        hx-vals='{"accessKey": "{{ js .Key }}"}'
+                        hx-confirm="Are you sure you want to delete this access key?"
+                        hx-target="#access-key-index-{{ $index }}">Delete</button>
+                </td>
+            </tr>
+            {{end}}
+        </table>
+        <div class="pagination">
+            <!-- Previous Page Link -->
+            {{ if gt .Page 1 }}
+            <a hx-get="access?page={{sub .Page 1}}&size={{.Size}}" hx-trigger="click" hx-target="#section"
+                class="prev">←</a>
+            {{ else }}
+            <span class="prev disabled">←</span>
+            {{ end }}
+
+
+            {{range .PaginationPages}}
+            <span hx-get="access?page={{.}}&size={{$.Size}}" hx-trigger="click" hx-target="#section" {{if eq .
+                $.Page}}class="active" {{end}}>{{.}}</span>
+            {{end}}
+
+
+            <!-- Next Page Link -->
+            {{ if lt .Page .Pages }}
+            <a hx-get="access?page={{add .Page 1}}&size={{.Size}}" hx-trigger="click" hx-target="#section">→</a>
+            {{ else }}
+            <span class="next disabled">→</span>
+            {{ end }}
+        </div>
+
+    </div>
+</div>
+{{ end }}

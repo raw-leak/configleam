@@ -2,6 +2,7 @@ package gitmanager
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -143,7 +144,7 @@ func (gr *GitRepository) PullUpdatesFromRemoteRepo() error {
 
 	err := gr.wt.Pull(&git.PullOptions{RemoteName: "origin", Auth: gr.getAuth()})
 	if err != nil && err != git.NoErrAlreadyUpToDate {
-		fmt.Println(err)
+		log.Println(err)
 		return fmt.Errorf("error pulling updates: %w", err)
 	}
 

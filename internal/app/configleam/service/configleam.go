@@ -62,6 +62,7 @@ type ConfigleamServiceConfig struct {
 	PullInterval time.Duration
 }
 
+// TODO: test
 func New(cfg ConfigleamServiceConfig, parser Parser, extractor Extractor, repository Repository, analyzer Analyzer, secrets Secrets) *ConfigleamService {
 	gitrepos := []*gitmanager.GitRepository{}
 
@@ -101,7 +102,7 @@ func (s *ConfigleamService) Run(ctx context.Context) {
 		log.Fatalf(err.Error())
 	}
 
-	go s.watchRemoteReposForUpdates()
+	// go s.watchRemoteReposForUpdates()
 }
 
 func (s *ConfigleamService) ReadConfig(ctx context.Context, env string, groups, globals []string) (map[string]interface{}, error) {
@@ -266,4 +267,8 @@ func (s *ConfigleamService) CloneConfig(ctx context.Context, cloneEnv, newEnv st
 	}
 
 	return nil
+}
+
+func (s *ConfigleamService) GetEnvs(_ context.Context) []string {
+	return s.envs
 }

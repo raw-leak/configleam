@@ -5,6 +5,7 @@ import (
 
 	"github.com/raw-leak/configleam/config"
 	"github.com/raw-leak/configleam/internal/app/configleam-access/controller"
+	"github.com/raw-leak/configleam/internal/app/configleam-access/interfaces"
 	"github.com/raw-leak/configleam/internal/app/configleam-access/keys"
 	"github.com/raw-leak/configleam/internal/app/configleam-access/repository"
 	"github.com/raw-leak/configleam/internal/app/configleam-access/service"
@@ -15,7 +16,7 @@ type ConfigleamAccessSet struct {
 	*controller.ConfigleamAccessEndpoints
 }
 
-func Init(ctx context.Context, cfg *config.Config, encryptor repository.Encryptor, perms service.Permissions) (*ConfigleamAccessSet, error) {
+func Init(ctx context.Context, cfg *config.Config, encryptor repository.Encryptor, perms interfaces.Permissions) (*ConfigleamAccessSet, error) {
 	repo, err := repository.New(ctx, repository.RepositoryConfig{
 		RedisAddrs:    cfg.RedisAddrs,
 		RedisUsername: cfg.RedisUsername,

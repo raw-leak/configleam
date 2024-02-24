@@ -29,7 +29,7 @@ run: build
 ## test: Run the unit tests
 test:
 	@echo "  >  Running tests..."
-	@go test ./...
+	@GO_ENV=test go test ./...
 
 ## fmt: Format the Go source code
 fmt:

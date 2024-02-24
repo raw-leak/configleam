@@ -12,7 +12,8 @@ import (
 
 // Encryptor holds the encryption key and pre-initialized AEAD instance
 type Encryptor struct {
-	aead cipher.AEAD
+	aead     cipher.AEAD
+	detNonce []byte
 }
 
 // NewEncryptor creates a new Encryptor instance with a given key.
@@ -34,10 +35,19 @@ func NewEncryptor(key string) (*Encryptor, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Encryptor{aead: aead}, nil
+
+	detNonce := []byte(key[:chacha20.NonceSizeX])
+
+	return &Encryptor{aead: aead, detNonce: detNonce}, nil
 }
 
-// Encrypt takes a plaintext string and returns an encrypted string.
+// EncryptDet encrypts the plaintext deterministically and returns it encrypted
+func (e *Encryptor) EncryptDet(_ context.Context, plaintext []byte) ([]byte, error) {
+	ciphertext := e.aead.Seal(e.detNonce, e.detNonce, []byte(plaintext), nil)
+	return ciphertext, nil
+}
+
+// Encrypt encrypts the plaintext non-deterministically and returns it encrypted
 func (e *Encryptor) Encrypt(_ context.Context, plaintext []byte) ([]byte, error) {
 	nonce := make([]byte, chacha20.NonceSizeX)
 	if _, err := rand.Read(nonce); err != nil {
@@ -55,10 +65,8 @@ func (e *Encryptor) Decrypt(_ context.Context, ciphertext []byte) ([]byte, error
 		return nil, errors.New("ciphertext too short")
 	}
 
-	// Split nonce and ciphertext
 	nonce, encryptedMessage := ciphertext[:chacha20.NonceSizeX], ciphertext[chacha20.NonceSizeX:]
 
-	// Decrypt the message using the pre-initialized AEAD instance
 	decrypted, err := e.aead.Open(nil, nonce, encryptedMessage, nil)
 	if err != nil {
 		return nil, err

@@ -14,6 +14,14 @@ const (
 
 // AccessKeyPermissionsBuilder allows building new Access Key Permissions
 type AccessKeyPermissionsBuilder struct{}
+type AvailableAccessKeyPermissions struct {
+	EnvAdminAccess   bool `json:"envAdminAccess"`
+	ReadConfig       bool `json:"readConfig"`
+	RevealSecrets    bool `json:"revealSecrets"`
+	CloneEnvironment bool `json:"cloneEnvironment"`
+	CreateSecrets    bool `json:"createSecrets"`
+	AccessDashboard  bool `json:"accessDashboard"`
+}
 
 func New() *AccessKeyPermissionsBuilder {
 	return &AccessKeyPermissionsBuilder{}
@@ -23,6 +31,23 @@ func New() *AccessKeyPermissionsBuilder {
 func (b AccessKeyPermissionsBuilder) NewAccessKeyPermissions() *AccessKeyPermissions {
 	return &AccessKeyPermissions{
 		Permissions: make(Permissions),
+	}
+}
+
+type SinglePermission struct {
+	Label   string
+	Tooltip string
+	Value   string
+}
+
+func (b AccessKeyPermissionsBuilder) GetAvailableAccessKeyPermissions() []SinglePermission {
+	return []SinglePermission{
+		{Label: "Environment Administrator", Tooltip: "Grants full administrative access to the specific environment.", Value: "envAdminAccess"},
+		{Label: "Read Configuration", Tooltip: "Grants permission to view the configuration settings of the specific environment.", Value: "readConfig"},
+		{Label: "Reveal Configuration Secrets", Tooltip: "Grants permission to reveal secrets within the configuration settings of the specific environment.", Value: "revealSecrets"},
+		{Label: "Clone Environment Configuration", Tooltip: "Grants permission to create a new configuration by duplicating an existing one and adjusting certain global parameters.", Value: "cloneEnvironment"},
+		{Label: "Create Environment Secrets", Tooltip: "Grants permission to create secrets for the specific environment.", Value: "createSecrets"},
+		{Label: "Access Dashboard", Tooltip: "Grants permission to access the administrative dashboard for the specific environment.", Value: "accessDashboard"},
 	}
 }
 
@@ -54,6 +79,11 @@ func (up *AccessKeyPermissions) Can(env string, ops Operation) bool {
 		return false // No permissions for this environment
 	}
 	return currentOps&ops == ops
+}
+
+// Can checks if a user has permission of global admin.
+func (up *AccessKeyPermissions) IsGlobalAdmin() bool {
+	return up.Admin
 }
 
 // SetAdmin grants admin permissions.

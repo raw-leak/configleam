@@ -1,0 +1,31 @@
+.token-display {
+    background-color: #f0f0f0;
+    padding: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    border-radius: 5px;
+}
+
+.token-display input {
+    border: none;
+    background-color: transparent;
+    color: #333;
+    font-family: monospace;
+    width: 90%;
+}
+
+.token-display button {
+    background-color: #4CAF50;
+    /* Green background */
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.token-display button:hover {
+    background-color: #45a049;
+}

@@ -5,13 +5,16 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/raw-leak/configleam/internal/app/configleam-access/dto"
+	"github.com/raw-leak/configleam/internal/app/configleam-access/repository"
 )
 
 type Service interface {
 	GenerateAccessKey(ctx context.Context, accessKeyPerms dto.AccessKeyPermissionsDto) (dto.AccessKeyPermissionsDto, error)
 	DeleteAccessKeys(ctx context.Context, keys []string) error
+	PaginateAccessKeys(ctx context.Context, page, size int) (*repository.PaginatedAccessKeys, error)
 }
 
 type ConfigleamAccessEndpoints struct {
@@ -59,6 +62,40 @@ func (e ConfigleamAccessEndpoints) DeleteAccessKeysHandler(w http.ResponseWriter
 	w.Header().Set("Content-Type", "application/json")
 	response := map[string]string{"message": "Access-keys deleted successfully"}
 	err = json.NewEncoder(w).Encode(response)
+	if err != nil {
+		log.Printf("Error encoding response: %v", err)
+		http.Error(w, "Error encoding response", http.StatusInternalServerError)
+	}
+}
+
+func (e ConfigleamAccessEndpoints) PaginateAccessKeysHandler(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+
+	pageStr := query.Get("page")
+	sizeStr := query.Get("size")
+
+	page, err := strconv.Atoi(pageStr)
+	if err != nil {
+		http.Error(w, "Page must be a valid number", http.StatusBadRequest)
+		return
+	}
+
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil {
+		// Handle the case where size is not a number
+		http.Error(w, "Size must be a valid number", http.StatusBadRequest)
+		return
+	}
+
+	paginated, err := e.service.PaginateAccessKeys(r.Context(), page, size)
+	if err != nil {
+		log.Printf("Error paginating access-keys with error: %v", err)
+		http.Error(w, "Error paginating access-keys", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(*paginated)
 	if err != nil {
 		log.Printf("Error encoding response: %v", err)
 		http.Error(w, "Error encoding response", http.StatusInternalServerError)
