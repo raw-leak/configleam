@@ -9,10 +9,10 @@ import (
 	"syscall"
 
 	"github.com/raw-leak/configleam/config"
-	"github.com/raw-leak/configleam/internal/app/configleam"
-	configleamaccess "github.com/raw-leak/configleam/internal/app/configleam-access"
-	configleamdashboard "github.com/raw-leak/configleam/internal/app/configleam-dashboard"
-	configleamsecrets "github.com/raw-leak/configleam/internal/app/configleam-secrets"
+	"github.com/raw-leak/configleam/internal/app/access"
+	"github.com/raw-leak/configleam/internal/app/secrets"
+	"github.com/raw-leak/configleam/internal/app/configuration"
+	"github.com/raw-leak/configleam/internal/app/dashboard"
 	"github.com/raw-leak/configleam/internal/pkg/encryptor"
 	"github.com/raw-leak/configleam/internal/pkg/leaderelection"
 	"github.com/raw-leak/configleam/internal/pkg/permissions"
@@ -41,22 +41,22 @@ func run() error {
 
 	}
 
-	configleamAccessSet, err := configleamaccess.Init(ctx, cfg, encryptor, perms)
+	accessSet, err := access.Init(ctx, cfg, encryptor, perms)
 	if err != nil {
 		return err
 	}
 
-	configleamSecretsSet, err := configleamsecrets.Init(ctx, cfg, encryptor)
+	secretsSet, err := secrets.Init(ctx, cfg, encryptor)
 	if err != nil {
 		return err
 	}
 
-	configleamSet, err := configleam.Init(ctx, cfg, configleamSecretsSet)
+	configleamSet, err := configuration.Init(ctx, cfg, secretsSet)
 	if err != nil {
 		return err
 	}
 
-	configleamDashboardSet, err := configleamdashboard.Init(ctx, cfg, configleamAccessSet.ConfigleamAccess,configleamSet.ConfigleamService)
+	dashboardSet, err := dashboard.Init(ctx, cfg, accessSet.AccessService, configleamSet.ConfigurationService)
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func run() error {
 		configleamSet.Run(ctx)
 	}
 
-	httpServer := httpserver.NewHttpServer(configleamSet, configleamSecretsSet, configleamAccessSet, configleamDashboardSet, perms)
+	httpServer := httpserver.NewHttpServer(configleamSet, secretsSet, accessSet, dashboardSet, perms)
 
 	errChan := make(chan error, 2)
 	go func() {

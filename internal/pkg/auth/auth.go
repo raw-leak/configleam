@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/raw-leak/configleam/internal/app/configleam-access/dto"
+	"github.com/raw-leak/configleam/internal/app/access/dto"
 	"github.com/raw-leak/configleam/internal/pkg/auth/templates"
 	"github.com/raw-leak/configleam/internal/pkg/permissions"
 )
@@ -20,7 +20,7 @@ const (
 
 type AccessKeyContextKey struct{}
 
-type Access interface {
+type AccessService interface {
 	GetAccessKeyPermissions(ctx context.Context, key string) (*permissions.AccessKeyPermissions, bool, error)
 	GenerateAccessKey(ctx context.Context, accessKeyPerms dto.AccessKeyPermissionsDto) (dto.AccessKeyPermissionsDto, error)
 	DeleteAccessKeys(ctx context.Context, keys []string) error
@@ -37,13 +37,13 @@ type PermissionsBuilder interface {
 
 // AuthMiddleware holds the service needed to validate permissions
 type AuthMiddleware struct {
-	access    Access
+	access    AccessService
 	perms     PermissionsBuilder
 	templates Templates
 }
 
 // NewAuthMiddleware creates a new instance of AuthMiddleware
-func NewAuthMiddleware(access Access, perms PermissionsBuilder) *AuthMiddleware {
+func NewAuthMiddleware(access AccessService, perms PermissionsBuilder) *AuthMiddleware {
 	return &AuthMiddleware{
 		access:    access,
 		perms:     perms,

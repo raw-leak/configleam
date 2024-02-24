@@ -6,10 +6,10 @@ import (
 )
 
 type Handlers struct {
-	service ConfigleamService
+	service ConfigurationService
 }
 
-func newHandlers(s ConfigleamService) *Handlers {
+func newHandlers(s ConfigurationService) *Handlers {
 	return &Handlers{s}
 }
 
