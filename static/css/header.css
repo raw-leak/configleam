@@ -1,0 +1,18 @@
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    margin-top: 20px;
+}
+
+.logo {
+    font-size: 2em;
+    color: #333;
+    font-weight: 300;
+}
+
+.logout-button {
+    cursor: pointer;
+    color: #007bff;
+}

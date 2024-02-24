@@ -1,0 +1,23 @@
+{{ define "menu.html" }}
+<nav class="menu">
+    <a hx-get="access?page=1&amp;size=10" hx-target="#section" class="menu-item selected" hx-trigger="load">Access
+        Keys</a>
+</nav>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var menuItems = document.querySelectorAll('.menu-item');
+
+        menuItems.forEach(function (item) {
+            item.addEventListener('click', function (event) {
+                menuItems.forEach(function (item) {
+                    item.classList.remove('selected');
+                });
+                event.target.classList.add('selected');
+            });
+        });
+
+    });
+</script>
+
+{{ end }}

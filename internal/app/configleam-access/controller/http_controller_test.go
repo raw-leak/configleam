@@ -6,11 +6,13 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/raw-leak/configleam/internal/app/configleam-access/controller"
 	"github.com/raw-leak/configleam/internal/app/configleam-access/dto"
+	"github.com/raw-leak/configleam/internal/app/configleam-access/repository"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
 )
@@ -27,6 +29,11 @@ func (m *MockConfigleamAccessService) GenerateAccessKey(ctx context.Context, per
 func (m *MockConfigleamAccessService) DeleteAccessKeys(ctx context.Context, keys []string) error {
 	args := m.Called(ctx, keys)
 	return args.Error(0)
+}
+
+func (m *MockConfigleamAccessService) PaginateAccessKeys(ctx context.Context, page, size int) (*repository.PaginatedAccessKeys, error) {
+	args := m.Called(ctx, page, size)
+	return args.Get(0).(*repository.PaginatedAccessKeys), args.Error(1)
 }
 
 type EndpointSuite struct {
@@ -203,6 +210,74 @@ func (suite *EndpointSuite) TestDeleteAccessKeysHandler() {
 				suite.NoError(err)
 
 				suite.Equal(expectedResponseBody, actualResponseBody)
+			} else {
+				actualErrorMessage := strings.TrimSpace(rr.Body.String())
+				suite.Equal(tc.expectedResponseBody, actualErrorMessage)
+			}
+		})
+	}
+}
+
+func (suite *EndpointSuite) TestPaginateAccessKeysHandler() {
+	// Define test cases
+	testCases := []struct {
+		name                 string
+		page                 int
+		size                 int
+		mockResponse         *repository.PaginatedAccessKeys
+		expectedErr          error
+		expectedStatus       int
+		expectedResponseBody string
+	}{
+		{
+			name:        "Successful pagination with empty response",
+			page:        1,
+			size:        10,
+			expectedErr: nil,
+			mockResponse: &repository.PaginatedAccessKeys{
+				Total: 0,
+				Pages: 0,
+				Page:  1,
+				Size:  10,
+				Items: []repository.AccessKeyMetadata{},
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:                 "Service Returns Error",
+			page:                 1,
+			size:                 10,
+			mockResponse:         nil,
+			expectedErr:          errors.New("paginating error"),
+			expectedStatus:       http.StatusInternalServerError,
+			expectedResponseBody: `Error paginating access-keys`,
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			// Arrange
+			queryString := "?size=" + strconv.Itoa(tc.size) + "&page=" + strconv.Itoa(tc.page)
+			req, err := http.NewRequest("GET", "/"+queryString, nil)
+			suite.NoError(err)
+
+			rr := httptest.NewRecorder()
+			handler := http.HandlerFunc(suite.endpoints.PaginateAccessKeysHandler)
+
+			suite.service.On("PaginateAccessKeys", mock.Anything, tc.page, tc.size).Once().Return(tc.mockResponse, tc.expectedErr)
+
+			// Act
+			handler.ServeHTTP(rr, req)
+
+			// Assert
+			suite.Equal(tc.expectedStatus, rr.Code)
+
+			if rr.Code == http.StatusOK {
+				var actualResponseBody repository.PaginatedAccessKeys
+				err = json.NewDecoder(rr.Body).Decode(&actualResponseBody)
+				suite.NoError(err)
+
+				suite.Equal(*tc.mockResponse, actualResponseBody)
 			} else {
 				actualErrorMessage := strings.TrimSpace(rr.Body.String())
 				suite.Equal(tc.expectedResponseBody, actualErrorMessage)

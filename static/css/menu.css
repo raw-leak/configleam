@@ -1,0 +1,17 @@
+nav.menu {
+    padding-top: 74px;
+    width: 200px;
+}
+
+nav.menu .menu-item {
+    display: block;
+    padding: 15px 20px;
+    cursor: pointer;
+    text-decoration: none;
+    color: #333;
+}
+
+nav.menu .menu-item.selected {
+    color: #007bff;
+    border-left: 4px solid #007bff;
+}

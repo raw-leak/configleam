@@ -1,0 +1,163 @@
+.access-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.new-token-btn {
+    padding: 10px 20px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.token-actions {
+    cursor: pointer;
+    color: #007bff;
+}
+
+.delete-btn {
+    background-color: #ff4d4d;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.delete-btn:hover {
+    background-color: #cc0000;
+}
+
+.hidden-checkbox {
+    display: none;
+}
+
+.checkbox-label {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 15px 0;
+    background-color: #ccc;
+    color: white;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+/* When the hidden checkbox is checked, change the label's background color */
+.hidden-checkbox:checked+.checkbox-label {
+    background-color: #4CAF50;
+}
+
+.checkbox-label:hover {
+    background-color: #a5d6a7;
+}
+
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-size: 14px;
+    color: #333;
+}
+
+th,
+td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+th {
+    background-color: #f8f8f8;
+    color: #333;
+    font-weight: bold;
+}
+
+tr:nth-child(even) {
+    background-color: #f2f2f2;
+}
+
+
+tr:hover {
+    background-color: #e9e9e9;
+}
+
+/* Define minimum widths for each column based on content */
+th:nth-child(1),
+td:nth-child(1) {
+    min-width: 150px;
+}
+
+th:nth-child(2),
+td:nth-child(2) {
+    min-width: 200px;
+}
+
+th:nth-child(3),
+td:nth-child(3) {
+    min-width: 100px;
+}
+
+th:nth-child(4),
+td:nth-child(4) {
+    min-width: 100px;
+}
+
+th:nth-child(5),
+td:nth-child(5) {
+    min-width: 100px;
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    padding: 20px;
+}
+
+.pagination a,
+.pagination span {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    min-width: 35px;
+    height: 35px;
+    border: 1px solid #cccccc;
+    color: #555555;
+    border-radius: 5px;
+    text-decoration: none;
+    font-size: 14px;
+    transition: background-color 0.2s, color 0.2s;
+    cursor: pointer;
+}
+
+.pagination .active {
+    background-color: #007bff;
+    color: #ffffff;
+    border-color: #007bff;
+}
+
+.pagination a:not(.disabled):hover,
+.pagination span:not(.disabled):hover {
+    background-color: #0056b3;
+    color: #ffffff;
+}
+
+.pagination .disabled {
+    color: #cccccc;
+    cursor: not-allowed;
+    background-color: #f9f9f9;
+    border-color: #cccccc;
+}
+
+.prev,
+.next {
+    opacity: 1;
+}

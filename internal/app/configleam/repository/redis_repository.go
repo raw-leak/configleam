@@ -67,6 +67,7 @@ func (r *RedisConfigRepository) storeConfig(ctx context.Context, envName string,
 	return nil
 }
 
+// TODO: test
 func (r *RedisConfigRepository) DeleteConfig(ctx context.Context, env, gitRepoName string) error {
 	luaScript := `
         local keys = redis.call('keys', ARGV[1])
@@ -288,7 +289,6 @@ func (r *RedisConfigRepository) CloneConfig(ctx context.Context, cloneEnv, newEn
 	}
 
 	if len(updateGlobal) > 0 {
-		fmt.Println("CLOnING")
 		pipeline := r.Client.Pipeline()
 
 		for k, v := range updateGlobal {
@@ -333,6 +333,7 @@ func (r *RedisConfigRepository) CloneConfig(ctx context.Context, cloneEnv, newEn
 	return nil
 }
 
+// TODO: test
 func (r *RedisConfigRepository) HealthCheck(ctx context.Context) error {
 	_, err := r.Client.Ping(ctx).Result()
 	if err != nil {

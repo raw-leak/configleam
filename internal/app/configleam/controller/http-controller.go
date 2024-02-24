@@ -55,7 +55,6 @@ func (e ConfigleamEndpoints) CloneConfigHandler(w http.ResponseWriter, r *http.R
 		http.Error(w, "Error decoding request body", http.StatusBadRequest)
 		return
 	}
-	fmt.Println(updateGlobals)
 
 	err = e.service.CloneConfig(ctx, env, newEnv, updateGlobals)
 	if err != nil {
@@ -80,11 +79,9 @@ func (e ConfigleamEndpoints) ReadConfigHandler(w http.ResponseWriter, r *http.Re
 	globals := query["globals"]
 	env := query.Get("env")
 
-	ctx := context.Background()
-
-	config, err := e.service.ReadConfig(ctx, env, groups, globals)
+	config, err := e.service.ReadConfig(r.Context(), env, groups, globals)
 	if err != nil {
-		fmt.Println("Error building configuration response:", err.Error())
+		log.Println("Error building configuration response:", err.Error())
 		http.Error(w, "Error building configuration response", http.StatusInternalServerError)
 		return
 	}
@@ -92,7 +89,7 @@ func (e ConfigleamEndpoints) ReadConfigHandler(w http.ResponseWriter, r *http.Re
 	w.Header().Set("Content-Type", "application/json")
 
 	if err := json.NewEncoder(w).Encode(config); err != nil {
-		fmt.Println("Error encoding response:", err)
+		log.Println("Error encoding response:", err)
 		http.Error(w, "Error encoding response", http.StatusInternalServerError)
 		return
 	}

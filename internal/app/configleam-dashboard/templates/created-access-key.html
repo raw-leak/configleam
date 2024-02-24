@@ -1,0 +1,20 @@
+{{ define "created-access-key.html" }}
+<div class="created-access-key">
+    <div class="token-display">
+        <input id="accessKey" value="{{ .AccessKey }}" readonly>
+        <button onclick="copyToken()">Copy</button>
+    </div>
+</div>
+<script>
+    function copyToken() {
+        var copyText = document.getElementById("accessKey");
+        copyText.select();
+        copyText.setSelectionRange(0, 99999);
+
+        document.execCommand("copy");
+
+        // Optional: Show a message indicating that the text was copied.
+        alert("Copied the text: " + copyText.value);
+    }
+</script>
+{{ end }}

@@ -1,4 +1,4 @@
-package gitmanager_test
+package helper_test
 
 import (
 	"testing"

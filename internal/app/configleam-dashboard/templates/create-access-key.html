@@ -1,0 +1,81 @@
+{{ define "create-access-key.html" }}
+
+{{ $envs := .Envs }}
+{{ $perms := .Perms }}
+
+<div class="form-container">
+    <span class="close-button" hx-get="access?page=1&size=10" hx-target="#section">&times;</span>
+    <h2>Create New Access Key:</h2>
+    <div id="new-access-key-form">
+        <form hx-post="access/create" hx-target="#new-access-key-form">
+            <div class="form-group">
+                <label for="access-key-name">Name:</label>
+                <input type="text" id="access-key-name" name="access-key-name" required>
+            </div>
+
+            <div class="form-group">
+                <label for="expiration-date">Expiration Date (Optional):</label>
+                <input type="date" id="expiration-date" name="expiration-date">
+            </div>
+
+            <div class="form-group checkbox-button">
+                <input type="checkbox" id="global-admin" name="globalAdmin" value="true" class="hidden-checkbox">
+                <label for="global-admin" class="checkbox-label">Global Admin</label>
+            </div>
+
+            <div class="permissions-container" id="permissions-container">
+                {{ range $env := $envs }}
+                <div class="environment-group">
+                    <h3 class="environment-name">{{ $env }}</h3>
+                    <div class="permissions-grid">
+                        {{ range $perm := $perms }}
+                        <div class="permission">
+                            <input type="checkbox" id="{{ $env }}-{{ $perm.Value }}"
+                                name="env[{{ $env }}][{{ $perm.Value }}]" value="true" class="permission-input">
+                            <label for="{{ $env }}-{{ $perm.Value }}" class="permission-label">{{ $perm.Label }}</label>
+                            <!-- <div class="tooltip">{{ $perm.Tooltip }}</div> -->
+                        </div>
+                        {{ end }}
+                    </div>
+                </div>
+                {{ end }}
+            </div>
+
+            <input type="submit" value="Create Token">
+        </form>
+    </div>
+
+</div>
+<script>
+    (function () {
+        const globalAdminCheckbox = document.getElementById('global-admin');
+        const permissionsCheckboxes = document.querySelectorAll('.permission-input');
+        const permissionsContainer = document.getElementById('permissions-container');
+
+        function togglePermissions(disabled) {
+            console.log(permissionsContainer.style.display)
+            permissionsContainer.style.display = disabled ? 'none' : 'block';
+
+            permissionsCheckboxes.forEach(function (checkbox) {
+                checkbox.disabled = false;
+                checkbox.checked = false;
+            });
+        }
+
+
+
+        if (globalAdminCheckbox) {
+            globalAdminCheckbox.addEventListener('change', function () {
+                togglePermissions(this.checked);
+            });
+        }
+
+        // Initial state adjustment if needed (e.g., form is reloaded with 'Global Admin' already checked)
+        if (globalAdminCheckbox && globalAdminCheckbox.checked) {
+            togglePermissions(true);
+        }
+    })();
+</script>
+
+
+{{ end }}

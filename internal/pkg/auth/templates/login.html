@@ -1,0 +1,45 @@
+{{ define "login.html" }}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Configleam</title>
+    <link rel="stylesheet" href="/static/css/login.css">
+    <script src="https://unpkg.com/htmx.org"></script>
+</head>
+
+<body>
+    <div class="login-wrapper area">
+        <div class="login-container">
+            <div class="logo">Configleam</div>
+
+            {{ if and .ErrorMessage (gt (len .ErrorMessage) 1) }}
+            <div class="error-message">{{ .ErrorMessage }}</div>
+            {{ end }}
+
+            <form action="" method="POST" class="login-form">
+                <input type="text" id="username" name="username" placeholder="Username" required>
+                <input type="password" id="password" name="password" placeholder="Password" required>
+                <button type="submit">Login</button>
+            </form>
+
+            <ul class="circles">
+                <li></li>
+                <li></li>
+                <li></li>
+                <li></li>
+                <li></li>
+                <li></li>
+                <li></li>
+                <li></li>
+                <li></li>
+                <li></li>
+            </ul>
+        </div>
+    </div>
+</body>
+
+</html>
+{{ end }}

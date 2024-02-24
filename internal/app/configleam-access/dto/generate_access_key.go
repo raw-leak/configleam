@@ -1,11 +1,10 @@
 package dto
 
-import "github.com/raw-leak/configleam/internal/pkg/permissions"
+import (
+	"time"
 
-type AccessKeyPermissionsMeta struct {
-	Name        string `json:"name,omitempty"`
-	Description string `json:"description,omitempty"`
-}
+	"github.com/raw-leak/configleam/internal/pkg/permissions"
+)
 
 // EnvironmentPermissions represents permissions for a single environment.
 type EnvironmentPermissions struct {
@@ -22,7 +21,8 @@ type AccessKeyPermissionsDto struct {
 	GlobalAdmin bool                              `json:"globalAdmin"`
 	Envs        map[string]EnvironmentPermissions `json:"environments"`
 	AccessKey   string                            `json:"accessKey,omitempty"`
-	AccessKeyPermissionsMeta
+	Name        string                            `json:"name,omitempty"`
+	ExpDate     time.Time                         `json:"expDate,omitempty"`
 }
 
 func (req *AccessKeyPermissionsDto) ToAccessKeyPermissions() permissions.AccessKeyPermissions {
@@ -56,8 +56,4 @@ func (req *AccessKeyPermissionsDto) ToAccessKeyPermissions() permissions.AccessK
 	perms.Admin = req.GlobalAdmin
 
 	return perms
-}
-
-func (req *AccessKeyPermissionsDto) ToMeta() map[string]string {
-	return map[string]string{"name": req.Name, "description": req.Description}
 }

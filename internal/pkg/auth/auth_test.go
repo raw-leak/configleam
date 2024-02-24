@@ -1,4 +1,4 @@
-package httpserver_test
+package auth_test
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/raw-leak/configleam/internal/app/configleam-access/dto"
+	"github.com/raw-leak/configleam/internal/pkg/auth"
 	"github.com/raw-leak/configleam/internal/pkg/permissions"
 	"github.com/raw-leak/configleam/internal/pkg/transport/httpserver"
 	"github.com/stretchr/testify/suite"
@@ -14,26 +16,51 @@ import (
 type AuthMiddlewareTestSuite struct {
 	suite.Suite
 	access     *MockConfigleamAccessService
+	templates  *MockTemplates
 	perms      httpserver.PermissionsBuilder
-	authMiddle *httpserver.AuthMiddleware
+	authMiddle *auth.AuthMiddleware
+}
+
+type MockTemplates struct {
+	mockLogin func(w http.ResponseWriter, errMsg string)
+	mockError func(w http.ResponseWriter, errMsg string)
+}
+
+func (m *MockTemplates) Login(w http.ResponseWriter, errMsg string) {
+	m.mockLogin(w, errMsg)
+}
+
+func (m *MockTemplates) Error(w http.ResponseWriter, errMsg string) {
+	m.mockError(w, errMsg)
 }
 
 type MockConfigleamAccessService struct {
-	mockPermCheck func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error)
+	mockGetAccessKeyPermissions func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error)
+	mockGenerateAccessKey       func(ctx context.Context, perms dto.AccessKeyPermissionsDto) (dto.AccessKeyPermissionsDto, error)
+	mockDeleteAccessKeys        func(ctx context.Context, keys []string) error
+}
+
+func (m *MockConfigleamAccessService) GetAccessKeyPermissions(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
+	return m.mockGetAccessKeyPermissions(ctx, accessKey)
+}
+
+func (m *MockConfigleamAccessService) GenerateAccessKey(ctx context.Context, perms dto.AccessKeyPermissionsDto) (dto.AccessKeyPermissionsDto, error) {
+	return m.mockGenerateAccessKey(ctx, perms)
+}
+
+func (m *MockConfigleamAccessService) DeleteAccessKeys(ctx context.Context, keys []string) error {
+	return m.mockDeleteAccessKeys(ctx, keys)
 }
 
 func TestAuthMiddlewareTestSuite(t *testing.T) {
 	suite.Run(t, new(AuthMiddlewareTestSuite))
 }
 
-func (m *MockConfigleamAccessService) GetAccessKeyPermissions(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
-	return m.mockPermCheck(ctx, accessKey)
-}
-
 func (suite *AuthMiddlewareTestSuite) SetupTest() {
+	suite.templates = &MockTemplates{}
 	suite.access = &MockConfigleamAccessService{}
 	suite.perms = permissions.New()
-	suite.authMiddle = httpserver.NewAuthMiddleware(suite.access, suite.perms)
+	suite.authMiddle = auth.NewAuthMiddleware(suite.access, suite.perms)
 }
 
 func (suite *AuthMiddlewareTestSuite) TestAuthMiddleware() {
@@ -50,7 +77,7 @@ func (suite *AuthMiddlewareTestSuite) TestAuthMiddleware() {
 			accessKey:          "admin-key",
 			requiredPermission: permissions.ReadConfig,
 			prepareMock: func() {
-				suite.access.mockPermCheck = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
+				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
 					perms := suite.perms.NewAccessKeyPermissions()
 					perms.SetAdmin()
 					return perms, true, nil
@@ -63,7 +90,7 @@ func (suite *AuthMiddlewareTestSuite) TestAuthMiddleware() {
 			accessKey:          "admin-key",
 			requiredPermission: permissions.CloneEnvironment,
 			prepareMock: func() {
-				suite.access.mockPermCheck = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
+				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
 					perms := suite.perms.NewAccessKeyPermissions()
 					perms.SetAdmin()
 					return perms, true, nil
@@ -76,7 +103,7 @@ func (suite *AuthMiddlewareTestSuite) TestAuthMiddleware() {
 			accessKey:          "admin-key",
 			requiredPermission: permissions.AccessDashboard,
 			prepareMock: func() {
-				suite.access.mockPermCheck = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
+				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
 					perms := suite.perms.NewAccessKeyPermissions()
 					perms.SetAdmin()
 					return perms, true, nil
@@ -90,7 +117,7 @@ func (suite *AuthMiddlewareTestSuite) TestAuthMiddleware() {
 			accessKey:          "admin-key",
 			requiredPermission: permissions.AccessDashboard | permissions.ReadConfig | permissions.RevealSecrets | permissions.CloneEnvironment,
 			prepareMock: func() {
-				suite.access.mockPermCheck = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
+				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
 					perms := suite.perms.NewAccessKeyPermissions()
 					perms.SetAdmin()
 					return perms, true, nil
@@ -104,7 +131,7 @@ func (suite *AuthMiddlewareTestSuite) TestAuthMiddleware() {
 			accessKey:          "user-key",
 			requiredPermission: permissions.CloneEnvironment,
 			prepareMock: func() {
-				suite.access.mockPermCheck = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
+				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
 					perms := suite.perms.NewAccessKeyPermissions()
 					perms.Grant("default", permissions.ReadConfig) // Only read permission
 					return perms, true, nil
@@ -118,7 +145,7 @@ func (suite *AuthMiddlewareTestSuite) TestAuthMiddleware() {
 			accessKey:          "user-key",
 			requiredPermission: permissions.ReadConfig,
 			prepareMock: func() {
-				suite.access.mockPermCheck = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
+				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
 					perms := suite.perms.NewAccessKeyPermissions()
 					perms.Grant("default", permissions.CloneEnvironment) // Only read permission
 					return perms, true, nil
@@ -132,7 +159,7 @@ func (suite *AuthMiddlewareTestSuite) TestAuthMiddleware() {
 			accessKey:          "access-key",
 			requiredPermission: permissions.AccessDashboard,
 			prepareMock: func() {
-				suite.access.mockPermCheck = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
+				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
 					perms := suite.perms.NewAccessKeyPermissions()
 					perms.Grant("default", permissions.CloneEnvironment)
 					return perms, true, nil
@@ -145,7 +172,7 @@ func (suite *AuthMiddlewareTestSuite) TestAuthMiddleware() {
 			name:      "Access denied with Insufficient permissions key for accessing dashboard",
 			accessKey: "access-key",
 			prepareMock: func() {
-				suite.access.mockPermCheck = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
+				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
 					perms := suite.perms.NewAccessKeyPermissions()
 					perms.Grant("default", permissions.CloneEnvironment)
 					return perms, true, nil

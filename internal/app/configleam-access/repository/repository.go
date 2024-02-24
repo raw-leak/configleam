@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/raw-leak/configleam/internal/app/configleam-access/service"
 	rds "github.com/raw-leak/configleam/internal/pkg/redis"
 )
 
@@ -18,7 +17,7 @@ type RepositoryConfig struct {
 	EtcdPassword string
 }
 
-func New(ctx context.Context, cfg RepositoryConfig, encryptor Encryptor) (service.Repository, error) {
+func New(ctx context.Context, cfg RepositoryConfig, encryptor Encryptor) (*RedisRepository, error) {
 	if cfg.RedisAddrs == "" {
 		return nil, fmt.Errorf("RedisAddress is no provided")
 	}
