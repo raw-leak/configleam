@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Dashboard</title>
+
+    <link rel="stylesheet" href="/static/css/home.css">
+    <link rel="stylesheet" href="/static/css/header.css">
+    <link rel="stylesheet" href="/static/css/menu.css">
+    <link rel="stylesheet" href="/static/css/access.css">
+    <link rel="stylesheet" href="/static/css/config.css">
+    <link rel="stylesheet" href="/static/css/create-access-key.css">
+    <link rel="stylesheet" href="/static/css/created-access-key.css">
+
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+
+    <script src="https://unpkg.com/htmx.org"></script>
+
+    <base href="/dashboard/">
+</head>
+
+<body>
+    <div class="wrapper">
+        {{template "header.html" .}}
+        <div class="container">
+
+            {{template "menu.html" .}}
+
+            <main id="section" class="section">
+                <!-- Dynamic content gets loaded here -->
+            </main>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -1,6 +1,6 @@
 module github.com/raw-leak/configleam
 
-go 1.21.3
+go 1.22
 
 require (
 	github.com/emirpasic/gods v1.18.1

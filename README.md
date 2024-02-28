@@ -270,7 +270,7 @@ Granular permissions are at the core of our security model, allowing us to preci
 To facilitate access key management, we've introduced dedicated endpoints that enable users to create and delete access keys securely.
 
 - **Create Access Key:**
-  - Endpoint: `POST/PUT /v1/access`
+  - Endpoint: `POST /access`
   - Description: This endpoint allows users to create or update access keys with specified permissions. Below is an example JSON payload for creating access keys:
 
 ```json
@@ -337,7 +337,7 @@ Response Example:
 `accessKey`: The newly generated access key that is associated with the provided permissions.
 
 - **Delete Access Key:**
-  - Endpoint: `ANY /v1/access/delete`
+  - Endpoint: `DELETE /access`
   - Description: This endpoint allows administrators to delete access keys.
 
 

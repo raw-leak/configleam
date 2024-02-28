@@ -18,6 +18,7 @@ type Etcd struct {
 	Client *clientv3.Client
 }
 
+// TODO: provide support for etcd
 func New(ctx context.Context, config EtcdConfig) (*Etcd, error) {
 	return nil, nil
 	client, err := clientv3.New(clientv3.Config{})

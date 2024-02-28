@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/raw-leak/configleam/internal/app/configleam-access/dto"
+	"github.com/raw-leak/configleam/internal/app/access/dto"
 	"github.com/raw-leak/configleam/internal/pkg/auth"
 	"github.com/raw-leak/configleam/internal/pkg/permissions"
 	"github.com/raw-leak/configleam/internal/pkg/transport/httpserver"
@@ -15,7 +15,7 @@ import (
 
 type AuthMiddlewareTestSuite struct {
 	suite.Suite
-	access     *MockConfigleamAccessService
+	access     *MockAccessService
 	templates  *MockTemplates
 	perms      httpserver.PermissionsBuilder
 	authMiddle *auth.AuthMiddleware
@@ -30,25 +30,25 @@ func (m *MockTemplates) Login(w http.ResponseWriter, errMsg string) {
 	m.mockLogin(w, errMsg)
 }
 
-func (m *MockTemplates) Error(w http.ResponseWriter, errMsg string) {
+func (m *MockTemplates) LoginError(w http.ResponseWriter, errMsg string) {
 	m.mockError(w, errMsg)
 }
 
-type MockConfigleamAccessService struct {
+type MockAccessService struct {
 	mockGetAccessKeyPermissions func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error)
 	mockGenerateAccessKey       func(ctx context.Context, perms dto.AccessKeyPermissionsDto) (dto.AccessKeyPermissionsDto, error)
 	mockDeleteAccessKeys        func(ctx context.Context, keys []string) error
 }
 
-func (m *MockConfigleamAccessService) GetAccessKeyPermissions(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
+func (m *MockAccessService) GetAccessKeyPermissions(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
 	return m.mockGetAccessKeyPermissions(ctx, accessKey)
 }
 
-func (m *MockConfigleamAccessService) GenerateAccessKey(ctx context.Context, perms dto.AccessKeyPermissionsDto) (dto.AccessKeyPermissionsDto, error) {
+func (m *MockAccessService) GenerateAccessKey(ctx context.Context, perms dto.AccessKeyPermissionsDto) (dto.AccessKeyPermissionsDto, error) {
 	return m.mockGenerateAccessKey(ctx, perms)
 }
 
-func (m *MockConfigleamAccessService) DeleteAccessKeys(ctx context.Context, keys []string) error {
+func (m *MockAccessService) DeleteAccessKeys(ctx context.Context, keys []string) error {
 	return m.mockDeleteAccessKeys(ctx, keys)
 }
 
@@ -58,9 +58,9 @@ func TestAuthMiddlewareTestSuite(t *testing.T) {
 
 func (suite *AuthMiddlewareTestSuite) SetupTest() {
 	suite.templates = &MockTemplates{}
-	suite.access = &MockConfigleamAccessService{}
+	suite.access = &MockAccessService{}
 	suite.perms = permissions.New()
-	suite.authMiddle = auth.NewAuthMiddleware(suite.access, suite.perms)
+	suite.authMiddle = auth.NewAuthMiddleware(suite.access, suite.perms, suite.templates)
 }
 
 func (suite *AuthMiddlewareTestSuite) TestAuthMiddleware() {

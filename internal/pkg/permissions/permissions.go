@@ -72,16 +72,22 @@ func (up *AccessKeyPermissions) Grant(env string, ops Operation) {
 // Can checks if a user has permissions to perform specified operations in a given environment.
 func (up *AccessKeyPermissions) Can(env string, ops Operation) bool {
 	if up.Admin {
-		return true // Admins can do anything
+		return true
 	}
+
 	currentOps, ok := up.Permissions[env]
 	if !ok {
-		return false // No permissions for this environment
+		return false
 	}
+
+	if currentOps&EnvAdminAccess == EnvAdminAccess {
+		return true
+	}
+
 	return currentOps&ops == ops
 }
 
-// Can checks if a user has permission of global admin.
+// IsGlobalAdmin checks if a user has permission of global admin.
 func (up *AccessKeyPermissions) IsGlobalAdmin() bool {
 	return up.Admin
 }
@@ -89,4 +95,21 @@ func (up *AccessKeyPermissions) IsGlobalAdmin() bool {
 // SetAdmin grants admin permissions.
 func (up *AccessKeyPermissions) SetAdmin() {
 	up.Admin = true
+}
+
+func (up *AccessKeyPermissions) CanRevealSecrets(env string) bool {
+	if up.Admin {
+		return true
+	}
+
+	currentOps, ok := up.Permissions[env]
+	if !ok {
+		return false
+	}
+
+	if currentOps&EnvAdminAccess == EnvAdminAccess {
+		return true
+	}
+
+	return currentOps&RevealSecrets == RevealSecrets
 }
