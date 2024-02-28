@@ -36,6 +36,15 @@ fmt:
 	@echo "  >  Formatting code..."
 	@gofmt -w ${GOFMT_FILES}
 
+## lint: Run linting checks
+lint: fmt
+
+	@echo "Running go vet..."
+	@go vet ./...
+
+	@echo "Running golint..."
+	@golint ./...
+
 ## clean: Clean build files. Runs `go clean` internally
 clean:
 	@echo "  >  Cleaning build cache"

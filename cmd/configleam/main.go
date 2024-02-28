@@ -10,9 +10,9 @@ import (
 
 	"github.com/raw-leak/configleam/config"
 	"github.com/raw-leak/configleam/internal/app/access"
-	"github.com/raw-leak/configleam/internal/app/secrets"
 	"github.com/raw-leak/configleam/internal/app/configuration"
 	"github.com/raw-leak/configleam/internal/app/dashboard"
+	"github.com/raw-leak/configleam/internal/app/secrets"
 	"github.com/raw-leak/configleam/internal/pkg/encryptor"
 	"github.com/raw-leak/configleam/internal/pkg/leaderelection"
 	"github.com/raw-leak/configleam/internal/pkg/permissions"
@@ -51,12 +51,12 @@ func run() error {
 		return err
 	}
 
-	configleamSet, err := configuration.Init(ctx, cfg, secretsSet)
+	configurationSet, err := configuration.Init(ctx, cfg, secretsSet)
 	if err != nil {
 		return err
 	}
 
-	dashboardSet, err := dashboard.Init(ctx, cfg, accessSet.AccessService, configleamSet.ConfigurationService)
+	dashboardSet, err := dashboard.Init(ctx, cfg, accessSet.AccessService, configurationSet.ConfigurationService)
 	if err != nil {
 		return err
 	}
@@ -75,10 +75,10 @@ func run() error {
 
 		elector, err := leaderelection.New(&leConfig, func() {
 			log.Println("Started leading, starting service...")
-			configleamSet.Run(ctx)
+			configurationSet.Run(ctx)
 		}, func() {
 			log.Println("Stopped leading, shutting down service...")
-			configleamSet.Shutdown()
+			configurationSet.Shutdown()
 		})
 		if err != nil {
 			return err
@@ -87,10 +87,10 @@ func run() error {
 		go elector.Run(ctx)
 	} else {
 		log.Println("Running without leader election")
-		configleamSet.Run(ctx)
+		configurationSet.Run(ctx)
 	}
 
-	httpServer := httpserver.NewHttpServer(configleamSet, secretsSet, accessSet, dashboardSet, perms)
+	httpServer := httpserver.NewHttpServer(configurationSet, secretsSet, accessSet, dashboardSet, perms)
 
 	errChan := make(chan error, 2)
 	go func() {
@@ -112,7 +112,7 @@ func run() error {
 	}
 
 	if !bool(cfg.EnableLeaderElection) {
-		configleamSet.Shutdown()
+		configurationSet.Shutdown()
 	}
 
 	err = httpServer.Shutdown(ctx)

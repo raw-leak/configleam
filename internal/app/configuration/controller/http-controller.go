@@ -14,15 +14,15 @@ type Service interface {
 	ReadConfig(ctx context.Context, env string, groups, globals []string) (map[string]interface{}, error)
 }
 
-type ConfigleamEndpoints struct {
+type ConfigurationEndpoints struct {
 	service Service
 }
 
-func New(s Service) *ConfigleamEndpoints {
-	return &ConfigleamEndpoints{s}
+func New(s Service) *ConfigurationEndpoints {
+	return &ConfigurationEndpoints{s}
 }
 
-func (e ConfigleamEndpoints) DeleteConfigHandler(w http.ResponseWriter, r *http.Request) {
+func (e ConfigurationEndpoints) DeleteConfigHandler(w http.ResponseWriter, r *http.Request) {
 	query, ctx := r.URL.Query(), context.Background()
 
 	env := query.Get("env")
@@ -43,7 +43,7 @@ func (e ConfigleamEndpoints) DeleteConfigHandler(w http.ResponseWriter, r *http.
 	}
 }
 
-func (e ConfigleamEndpoints) CloneConfigHandler(w http.ResponseWriter, r *http.Request) {
+func (e ConfigurationEndpoints) CloneConfigHandler(w http.ResponseWriter, r *http.Request) {
 	query, ctx := r.URL.Query(), context.Background()
 
 	env := query.Get("env")
@@ -72,7 +72,7 @@ func (e ConfigleamEndpoints) CloneConfigHandler(w http.ResponseWriter, r *http.R
 	}
 }
 
-func (e ConfigleamEndpoints) ReadConfigHandler(w http.ResponseWriter, r *http.Request) {
+func (e ConfigurationEndpoints) ReadConfigHandler(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
 	groups := query["groups"]

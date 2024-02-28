@@ -30,7 +30,7 @@ func (m *MockTemplates) Login(w http.ResponseWriter, errMsg string) {
 	m.mockLogin(w, errMsg)
 }
 
-func (m *MockTemplates) Error(w http.ResponseWriter, errMsg string) {
+func (m *MockTemplates) LoginError(w http.ResponseWriter, errMsg string) {
 	m.mockError(w, errMsg)
 }
 
@@ -60,7 +60,7 @@ func (suite *AuthMiddlewareTestSuite) SetupTest() {
 	suite.templates = &MockTemplates{}
 	suite.access = &MockAccessService{}
 	suite.perms = permissions.New()
-	suite.authMiddle = auth.NewAuthMiddleware(suite.access, suite.perms)
+	suite.authMiddle = auth.NewAuthMiddleware(suite.access, suite.perms, suite.templates)
 }
 
 func (suite *AuthMiddlewareTestSuite) TestAuthMiddleware() {

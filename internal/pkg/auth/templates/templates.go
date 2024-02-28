@@ -51,5 +51,4 @@ func (t AuthTemplates) LoginError(w http.ResponseWriter, errMsg string) {
 		http.Error(w, "Error rendering login section", http.StatusInternalServerError)
 		return
 	}
-
 }

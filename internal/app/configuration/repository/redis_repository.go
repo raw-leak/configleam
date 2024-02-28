@@ -15,30 +15,34 @@ import (
 )
 
 const (
-	GlobalPrefix          = "global"
+	ConfigurationPrefix = "configleam:config"
+
+	GlobalPrefix = "global"
+	GroupPrefix  = "group"
+
 	ReadLockMaxRetries    = 3
 	ReadLockRetryInterval = 500 * time.Millisecond
 )
 
-type RedisConfigRepository struct {
+type RedisRepository struct {
 	*rds.Redis
 }
 
-func NewRedisRepository(redis *rds.Redis) *RedisConfigRepository {
-	return &RedisConfigRepository{redis}
+func NewRedisRepository(redis *rds.Redis) *RedisRepository {
+	return &RedisRepository{redis}
 }
 
-func (r *RedisConfigRepository) storeConfig(ctx context.Context, envName string, gitRepoName string, config *types.ParsedRepoConfig) error {
+func (r *RedisRepository) storeConfig(ctx context.Context, envName string, gitRepoName string, config *types.ParsedRepoConfig) error {
 	pipeline := r.Client.TxPipeline()
 
 	// Base key prefix based on environment and repository
 	// Key: <repo>:<env>:global|group:<configKey>
-	baseKeyPrefix := fmt.Sprintf("%s:%s:", gitRepoName, envName)
+	baseKeyPrefix := r.GetBaseKey(gitRepoName, envName)
 
 	// Store global configurations
 	// Key: <repo>:<env>:global:<key>
 	for configKey, value := range config.Globals {
-		globalKey := fmt.Sprintf("%s%s:%s", baseKeyPrefix, GlobalPrefix, configKey)
+		globalKey := r.GetGlobalKeyKey(baseKeyPrefix, GlobalPrefix, configKey)
 		jsonData, err := json.Marshal(value)
 		if err != nil {
 			return fmt.Errorf("error marshaling global config '%s': %v", configKey, err)
@@ -49,7 +53,7 @@ func (r *RedisConfigRepository) storeConfig(ctx context.Context, envName string,
 	// Store group configurations
 	// Key: <repo>:<env>:group:<groupName>
 	for groupName, groupConfig := range config.Groups {
-		groupKey := baseKeyPrefix + groupName
+		groupKey := r.GetGroupKey(baseKeyPrefix, groupName)
 
 		jsonData, err := json.Marshal(groupConfig)
 		if err != nil {
@@ -68,7 +72,7 @@ func (r *RedisConfigRepository) storeConfig(ctx context.Context, envName string,
 }
 
 // TODO: test
-func (r *RedisConfigRepository) DeleteConfig(ctx context.Context, env, gitRepoName string) error {
+func (r *RedisRepository) DeleteConfig(ctx context.Context, env, gitRepoName string) error {
 	luaScript := `
         local keys = redis.call('keys', ARGV[1])
         for i=1,#keys do
@@ -77,7 +81,7 @@ func (r *RedisConfigRepository) DeleteConfig(ctx context.Context, env, gitRepoNa
         return #keys
     `
 
-	keyPattern := fmt.Sprintf("%s:%s:*", gitRepoName, env)
+	keyPattern := r.GetCloneEnvDeletePatternKey(gitRepoName, env)
 	result, err := r.Client.Eval(ctx, luaScript, []string{}, keyPattern).Result()
 	if err != nil {
 		return fmt.Errorf("error executing Lua script for deletion: %v", err)
@@ -87,7 +91,7 @@ func (r *RedisConfigRepository) DeleteConfig(ctx context.Context, env, gitRepoNa
 	return nil
 }
 
-func (r *RedisConfigRepository) UpsertConfig(ctx context.Context, env string, gitRepoName string, config *types.ParsedRepoConfig) error {
+func (r *RedisRepository) UpsertConfig(ctx context.Context, env string, gitRepoName string, config *types.ParsedRepoConfig) error {
 	lockKey := fmt.Sprintf("lock:%s", env)
 
 	_, err := r.Client.Set(ctx, lockKey, "lock", time.Second).Result()
@@ -104,7 +108,7 @@ func (r *RedisConfigRepository) UpsertConfig(ctx context.Context, env string, gi
 	return r.storeConfig(ctx, env, gitRepoName, config)
 }
 
-func (r *RedisConfigRepository) ReadConfig(ctx context.Context, env string, groups, globalKeys []string) (map[string]interface{}, error) {
+func (r *RedisRepository) ReadConfig(ctx context.Context, env string, groups, globalKeys []string) (map[string]interface{}, error) {
 	err := r.checkLockAndRetry(ctx, env)
 	if err != nil {
 		return nil, fmt.Errorf("error verifying the lock while reading config for environment '%s': %v", env, err)
@@ -114,8 +118,8 @@ func (r *RedisConfigRepository) ReadConfig(ctx context.Context, env string, grou
 	for _, groupName := range groups {
 		// look for: *:<env>:group:<groupName>
 		// returns provided group collection from any repository
-		groupKeyPattern := fmt.Sprintf("*:%s:group:%s", env, groupName)
 
+		groupKeyPattern := r.GetGroupPatternKey(env, groupName)
 		// keys len could be equal to the amount of repositories connected to the configleam
 		// IMP: there will be a small number of group keys
 		groupKeys, err := r.Client.Keys(ctx, groupKeyPattern).Result()
@@ -157,7 +161,7 @@ func (r *RedisConfigRepository) ReadConfig(ctx context.Context, env string, grou
 				if _, ok := combinedGroupConfig[key]; !ok {
 					// fetch global value if not already fetched
 
-					globalKeyPattern := fmt.Sprintf("*:%s:global:%s", env, key)
+					globalKeyPattern := r.GetGlobalPatternKey(env, key)
 					keys, err := r.Client.Keys(ctx, globalKeyPattern).Result()
 					if err != nil {
 						return nil, fmt.Errorf("error reading keys by pattern '%s': %v", globalKeyPattern, err)
@@ -195,7 +199,8 @@ func (r *RedisConfigRepository) ReadConfig(ctx context.Context, env string, grou
 	for _, key := range globalKeys {
 		if _, ok := result[key]; !ok {
 			// look for a global key with next pattern: *:env:global:key
-			globalKeyPattern := fmt.Sprintf("*:%s:global:%s", env, key)
+			// globalKeyPattern := fmt.Sprintf("*:%s:global:%s", env, key)
+			globalKeyPattern := r.GetGlobalPatternKey(env, key)
 			keys, err := r.Client.Keys(ctx, globalKeyPattern).Result()
 			if err != nil {
 				return nil, fmt.Errorf("error reading keys by pattern '%s': %v", globalKeyPattern, err)
@@ -228,7 +233,7 @@ func (r *RedisConfigRepository) ReadConfig(ctx context.Context, env string, grou
 	return result, nil
 }
 
-func (r *RedisConfigRepository) checkLockAndRetry(ctx context.Context, env string) error {
+func (r *RedisRepository) checkLockAndRetry(ctx context.Context, env string) error {
 	lockKey := fmt.Sprintf("lock:%s", env)
 
 	for retry := 1; retry <= ReadLockMaxRetries; retry++ {
@@ -250,8 +255,8 @@ func (r *RedisConfigRepository) checkLockAndRetry(ctx context.Context, env strin
 	return errors.New("timeout waiting for the lock")
 }
 
-func (r *RedisConfigRepository) CloneConfig(ctx context.Context, cloneEnv, newEnv string, updateGlobal map[string]interface{}) error {
-	matchPattern := fmt.Sprintf("*:%s:*", cloneEnv)
+func (r *RedisRepository) CloneConfig(ctx context.Context, cloneEnv, newEnv string, updateGlobal map[string]interface{}) error {
+	matchPattern := r.GetCloneEnvPatternKey(cloneEnv)
 	oldSegment := fmt.Sprintf(":%s:", cloneEnv)
 	newSegment := fmt.Sprintf(":%s:", newEnv)
 
@@ -292,7 +297,7 @@ func (r *RedisConfigRepository) CloneConfig(ctx context.Context, cloneEnv, newEn
 		pipeline := r.Client.Pipeline()
 
 		for k, v := range updateGlobal {
-			globalKeyMatchPattern := fmt.Sprintf("*:%s:%s:%s", cloneEnv, GlobalPrefix, k)
+			globalKeyMatchPattern := r.GetGlobalPatternKey(cloneEnv, k)
 
 			globalKeys, err := r.Client.Keys(ctx, globalKeyMatchPattern).Result()
 			if err != nil {
@@ -334,11 +339,39 @@ func (r *RedisConfigRepository) CloneConfig(ctx context.Context, cloneEnv, newEn
 }
 
 // TODO: test
-func (r *RedisConfigRepository) HealthCheck(ctx context.Context) error {
+func (r *RedisRepository) HealthCheck(ctx context.Context) error {
 	_, err := r.Client.Ping(ctx).Result()
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (r *RedisRepository) GetBaseKey(gitRepoName string, envName string) string {
+	return fmt.Sprintf("%s:%s:%s", ConfigurationPrefix, gitRepoName, envName)
+}
+
+func (r *RedisRepository) GetGlobalKeyKey(baseKeyPrefix string, GlobalPrefix string, configKey string) string {
+	return fmt.Sprintf("%s:%s:%s", baseKeyPrefix, GlobalPrefix, configKey)
+}
+
+func (r *RedisRepository) GetGroupKey(baseKeyPrefix string, groupName string) string {
+	return fmt.Sprintf("%s:%s", baseKeyPrefix, groupName)
+}
+
+func (r *RedisRepository) GetGroupPatternKey(env string, groupName string) string {
+	return fmt.Sprintf("%s:*:%s:%s:%s", ConfigurationPrefix, env, GroupPrefix, groupName)
+}
+
+func (r *RedisRepository) GetGlobalPatternKey(env string, key string) string {
+	return fmt.Sprintf("%s:*:%s:%s:%s", ConfigurationPrefix, env, GlobalPrefix, key)
+}
+
+func (r *RedisRepository) GetCloneEnvPatternKey(cloneEnv string) string {
+	return fmt.Sprintf("%s:*:%s:*", ConfigurationPrefix, cloneEnv)
+}
+
+func (r *RedisRepository) GetCloneEnvDeletePatternKey(gitRepoName, clonedEnv string) string {
+	return fmt.Sprintf("%s:*:%s:%s:*", ConfigurationPrefix, gitRepoName, clonedEnv)
 }

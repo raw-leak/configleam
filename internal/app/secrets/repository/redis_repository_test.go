@@ -7,14 +7,14 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/raw-leak/configleam/internal/app/configleam-secrets/repository"
+	"github.com/raw-leak/configleam/internal/app/secrets/repository"
 	"github.com/raw-leak/configleam/internal/pkg/encryptor"
 	rds "github.com/raw-leak/configleam/internal/pkg/redis"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/suite"
 )
 
-type RedisConfigleamSecretsRepositorySuite struct {
+type RedisSecretsRepositorySuite struct {
 	suite.Suite
 
 	repository *repository.RedisRepository
@@ -24,11 +24,11 @@ type RedisConfigleamSecretsRepositorySuite struct {
 	key       string
 }
 
-func TestRedisConfigleamSecretsRepositorySuite(t *testing.T) {
-	suite.Run(t, new(RedisConfigleamSecretsRepositorySuite))
+func TestRedisSecretsRepositorySuite(t *testing.T) {
+	suite.Run(t, new(RedisSecretsRepositorySuite))
 }
 
-func (suite *RedisConfigleamSecretsRepositorySuite) SetupSuite() {
+func (suite *RedisSecretsRepositorySuite) SetupSuite() {
 	var err error
 
 	suite.client = redis.NewClient(&redis.Options{
@@ -41,16 +41,16 @@ func (suite *RedisConfigleamSecretsRepositorySuite) SetupSuite() {
 	suite.repository = repository.NewRedisRepository(&rds.Redis{Client: suite.client}, suite.encryptor)
 }
 
-func (suite *RedisConfigleamSecretsRepositorySuite) TearDownSuite() {
+func (suite *RedisSecretsRepositorySuite) TearDownSuite() {
 	suite.client.Close()
 }
 
-func (suite *RedisConfigleamSecretsRepositorySuite) BeforeTest(testName string) {
+func (suite *RedisSecretsRepositorySuite) BeforeTest(testName string) {
 	err := suite.client.FlushAll(context.Background()).Err()
 	suite.Require().NoErrorf(err, "Flushing all data from redis before each test within the test: %s", testName)
 }
 
-func (suite *RedisConfigleamSecretsRepositorySuite) TestGetSecret() {
+func (suite *RedisSecretsRepositorySuite) TestGetSecret() {
 	type prePopulateData struct {
 		key   string
 		value interface{}
@@ -169,7 +169,7 @@ func (suite *RedisConfigleamSecretsRepositorySuite) TestGetSecret() {
 				}},
 			},
 			expectedValue: nil,
-			expectedError: errors.New("not found value for secret 'database.password.password'"),
+			expectedError: repository.SecretNotFoundError{Key: "database.password.password"},
 		},
 	}
 
@@ -208,7 +208,7 @@ func (suite *RedisConfigleamSecretsRepositorySuite) TestGetSecret() {
 	}
 }
 
-// func (suite *RedisConfigleamSecretsRepositorySuite) TestUpsertSecrets1() {
+// func (suite *RedisSecretsRepositorySuite) TestUpsertSecrets1() {
 // 	type prePopulateData struct {
 // 		key   string
 // 		value interface{}
@@ -388,7 +388,7 @@ func (suite *RedisConfigleamSecretsRepositorySuite) TestGetSecret() {
 // 	}
 // }
 
-func (suite *RedisConfigleamSecretsRepositorySuite) TestUpsertSecrets() {
+func (suite *RedisSecretsRepositorySuite) TestUpsertSecrets() {
 	type prePopulateData struct {
 		key   string
 		value interface{}
@@ -629,3 +629,5 @@ func (suite *RedisConfigleamSecretsRepositorySuite) TestUpsertSecrets() {
 		})
 	}
 }
+
+// TODO: could take advantage of similar functionality test TestCloneConfig

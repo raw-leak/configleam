@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -10,6 +11,8 @@ import (
 	"github.com/raw-leak/configleam/internal/app/configuration/analyzer"
 	"github.com/raw-leak/configleam/internal/app/configuration/gitmanager"
 	"github.com/raw-leak/configleam/internal/app/configuration/types"
+	"github.com/raw-leak/configleam/internal/pkg/auth"
+	"github.com/raw-leak/configleam/internal/pkg/permissions"
 )
 
 const (
@@ -17,7 +20,8 @@ const (
 )
 
 type Secrets interface {
-	InsertSecrets(ctx context.Context, env string, cfg *map[string]interface{}) error
+	InsertSecrets(ctx context.Context, env string, cfg *map[string]interface{}, populate bool) error
+	CloneSecrets(ctx context.Context, env, newEnv string) error
 }
 
 type Extractor interface {
@@ -102,18 +106,27 @@ func (s *ConfigurationService) Run(ctx context.Context) {
 		log.Fatalf(err.Error())
 	}
 
-	// go s.watchRemoteReposForUpdates()
+	go s.watchRemoteReposForUpdates()
 }
 
 func (s *ConfigurationService) ReadConfig(ctx context.Context, env string, groups, globals []string) (map[string]interface{}, error) {
-	cfg, err := s.repository.ReadConfig(ctx, env, groups, globals)
-	if err != nil {
-		return nil, err
+	if env == "" {
+		return nil, errors.New("env cannot be empty")
 	}
 
-	err = s.secrets.InsertSecrets(ctx, env, &cfg)
+	accessKeyPerms, ok := ctx.Value(auth.AccessKeyContextKey{}).(permissions.AccessKeyPermissions)
+	if !ok {
+		return nil, errors.New("permissions were not found")
+	}
+
+	cfg, err := s.repository.ReadConfig(ctx, env, groups, globals)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read configuration: %w", err)
+	}
+
+	err = s.secrets.InsertSecrets(ctx, env, &cfg, accessKeyPerms.CanRevealSecrets(env))
+	if err != nil {
+		return nil, fmt.Errorf("failed to insert secrets: %w", err)
 	}
 
 	return cfg, nil
@@ -242,27 +255,38 @@ func (s *ConfigurationService) HealthCheck(ctx context.Context) error {
 }
 
 func (s *ConfigurationService) CloneConfig(ctx context.Context, cloneEnv, newEnv string, updateGlobals map[string]interface{}) error {
-	var env string
 	var gitrepo *gitmanager.GitRepository
+	found := false
 
 	for _, gr := range s.gitrepos {
 		for _, repoEnv := range gr.Envs {
 			if repoEnv.Name == cloneEnv {
 				gitrepo = gr
-				env = cloneEnv
+				found = true
+				break
 			}
+		}
+		if found {
+			break
 		}
 	}
 
-	if env == "" {
+	if !found {
 		return fmt.Errorf("env %s for cloning has not been found", cloneEnv)
 	}
 
 	gitrepo.Mux.Lock()
 	defer gitrepo.Mux.Unlock()
 
-	err := s.repository.CloneConfig(ctx, env, newEnv, updateGlobals)
-	if err != nil {
+	if err := s.repository.CloneConfig(ctx, cloneEnv, newEnv, updateGlobals); err != nil {
+		return err
+	}
+
+	if err := s.secrets.CloneSecrets(ctx, cloneEnv, newEnv); err != nil {
+		log.Printf("Error cloning secrets for %s to %s: %v", cloneEnv, newEnv, err)
+		if delErr := s.repository.DeleteConfig(ctx, newEnv, "*"); delErr != nil {
+			log.Printf("Error cleaning up config for %s after failed secrets clone: %v", newEnv, delErr)
+		}
 		return err
 	}
 

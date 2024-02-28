@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	dtoAccess "github.com/raw-leak/configleam/internal/app/access/dto"
+	accessDto "github.com/raw-leak/configleam/internal/app/access/dto"
 	"github.com/raw-leak/configleam/internal/app/access/repository"
 	"github.com/raw-leak/configleam/internal/app/dashboard/dto"
 	"github.com/raw-leak/configleam/internal/pkg/permissions"
@@ -15,26 +15,26 @@ type ConfigurationService interface {
 }
 
 type AccessService interface {
-	GenerateAccessKey(ctx context.Context, accessKeyPerms dtoAccess.AccessKeyPermissionsDto) (dtoAccess.AccessKeyPermissionsDto, error)
+	GenerateAccessKey(ctx context.Context, accessKeyPerms accessDto.AccessKeyPermissionsDto) (accessDto.AccessKeyPermissionsDto, error)
 	DeleteAccessKeys(ctx context.Context, keys []string) error
 	PaginateAccessKeys(ctx context.Context, page, size int) (*repository.PaginatedAccessKeys, error)
 	GetAvailableAccessKeyPermissions(ctx context.Context) []permissions.SinglePermission
 }
 
-type Dashboard struct {
+type DashboardService struct {
 	accessService        AccessService
 	configurationService ConfigurationService
 }
 
-// New creates a new instance of ConfigleamDashboard service.
-func New(accessService AccessService, configurationService ConfigurationService) *Dashboard {
-	return &Dashboard{
+// New creates a new instance of DashboardService service.
+func New(accessService AccessService, configurationService ConfigurationService) *DashboardService {
+	return &DashboardService{
 		accessService:        accessService,
 		configurationService: configurationService,
 	}
 }
 
-func (a *Dashboard) DashboardAccessKeys(ctx context.Context, page, size int) (dto.AccessParams, error) {
+func (a *DashboardService) DashboardAccessKeys(ctx context.Context, page, size int) (dto.AccessParams, error) {
 	paginated, err := a.accessService.PaginateAccessKeys(ctx, page, size)
 	if err != nil {
 		return dto.AccessParams{}, err
@@ -81,11 +81,11 @@ func (a *Dashboard) DashboardAccessKeys(ctx context.Context, page, size int) (dt
 	return ap, nil
 }
 
-func (a *Dashboard) GetConfigEnvs(ctx context.Context) []string {
+func (a *DashboardService) GetConfigEnvs(ctx context.Context) []string {
 	return a.configurationService.GetEnvs(ctx)
 }
 
-func (a *Dashboard) CreateAccessKeyParams(ctx context.Context) dto.CreateAccessKeyParams {
+func (a *DashboardService) CreateAccessKeyParams(ctx context.Context) dto.CreateAccessKeyParams {
 	perms := a.accessService.GetAvailableAccessKeyPermissions(ctx)
 
 	permsMap := []map[string]string{}
@@ -100,7 +100,7 @@ func (a *Dashboard) CreateAccessKeyParams(ctx context.Context) dto.CreateAccessK
 	return dto.CreateAccessKeyParams{Perms: permsMap, Envs: envs}
 }
 
-func (a Dashboard) CreateAccessKey(ctx context.Context, accessKeyPerms dtoAccess.AccessKeyPermissionsDto) (dto.CreatedAccessKey, error) {
+func (a DashboardService) CreateAccessKey(ctx context.Context, accessKeyPerms accessDto.AccessKeyPermissionsDto) (dto.CreatedAccessKey, error) {
 	res, err := a.accessService.GenerateAccessKey(ctx, accessKeyPerms)
 	if err != nil {
 		return dto.CreatedAccessKey{}, err
@@ -109,7 +109,7 @@ func (a Dashboard) CreateAccessKey(ctx context.Context, accessKeyPerms dtoAccess
 	return dto.CreatedAccessKey{AccessKey: res.AccessKey}, nil
 }
 
-func (a Dashboard) DeleteAccessKey(ctx context.Context, key string) error {
+func (a DashboardService) DeleteAccessKey(ctx context.Context, key string) error {
 	err := a.accessService.DeleteAccessKeys(ctx, []string{key})
 	if err != nil {
 		return err

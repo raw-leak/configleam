@@ -16,7 +16,7 @@ import (
 
 var tmpl *template.Template
 
-type Service interface {
+type DashboardService interface {
 	DashboardAccessKeys(context.Context, int, int) (dto.AccessParams, error)
 	CreateAccessKeyParams(context.Context) dto.CreateAccessKeyParams
 	CreateAccessKey(context.Context, accessDto.AccessKeyPermissionsDto) (dto.CreatedAccessKey, error)
@@ -24,11 +24,11 @@ type Service interface {
 }
 
 type DashboardEndpoints struct {
-	service   Service
+	service   DashboardService
 	templates *templates.DashboardTemplates
 }
 
-func New(service Service, templates *templates.DashboardTemplates) *DashboardEndpoints {
+func New(service DashboardService, templates *templates.DashboardTemplates) *DashboardEndpoints {
 	return &DashboardEndpoints{service: service, templates: templates}
 }
 
@@ -155,6 +155,8 @@ func parseCreateAccessKeyForm(r *http.Request) (*accessDto.AccessKeyPermissionsD
 		parts := strings.Split(key, "[")
 		if len(parts) == 1 { // Non-environment fields
 			switch key {
+			case "global-admin":
+				accessKeyParams.GlobalAdmin, _ = strconv.ParseBool(values[0])
 			case "access-key-name":
 				accessKeyParams.Name = values[0]
 			case "expiration-date":

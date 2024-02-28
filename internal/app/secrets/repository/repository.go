@@ -4,9 +4,15 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/raw-leak/configleam/internal/app/secrets/service"
 	rds "github.com/raw-leak/configleam/internal/pkg/redis"
 )
+
+type Repository interface {
+	GetSecret(ctx context.Context, env string, key string) (interface{}, error)
+	UpsertSecrets(ctx context.Context, env string, secrets map[string]interface{}) error
+	CloneSecrets(ctx context.Context, cloneEnv, newEnv string) error
+	HealthCheck(ctx context.Context) error
+}
 
 type RepositoryConfig struct {
 	RedisAddrs    string
@@ -18,7 +24,7 @@ type RepositoryConfig struct {
 	EtcdPassword string
 }
 
-func New(ctx context.Context, cfg RepositoryConfig, encryptor Encryptor) (service.Repository, error) {
+func New(ctx context.Context, cfg RepositoryConfig, encryptor Encryptor) (Repository, error) {
 	if cfg.RedisAddrs == "" {
 		return nil, fmt.Errorf("RedisAddress is no provided")
 	}

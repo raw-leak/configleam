@@ -1,7 +1,7 @@
 {{ define "access.html" }}
 <sid class="access-header">
     <h2 class="access-header-title">Access Keys</h2>
-    <button class="new-token-btn" data-hx-get="access/create/params" hx-target="#access-content">New Access
+    <button class="new-token-btn" hx-get="access/create" hx-target="#access-content">New Access
         Key</button>
 </sid>
 
@@ -24,7 +24,7 @@
                 <td>{{.CreationDate}}</td>
                 <td>{{.ExpirationDate}}</td>
                 <td class="token-actions">
-                    <button class="delete-btn" hx-post="access/delete?key={{ .Key }}"
+                    <button class="delete-btn" hx-post="access/delete"
                         hx-vals='{"accessKey": "{{ js .Key }}"}'
                         hx-confirm="Are you sure you want to delete this access key?"
                         hx-target="#access-key-index-{{ $index }}">Delete</button>

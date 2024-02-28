@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
 	"strings"
 
@@ -40,7 +41,8 @@ func (r *RedisRepository) GetSecret(ctx context.Context, env, fullKey string) (i
 	key := keyPath[0]
 	encryptedBytes, err := r.Client.Get(ctx, r.GetSecretKey(env, key)).Bytes()
 	if err == redis.Nil {
-		return nil, fmt.Errorf("key '%s' was not found", fullKey)
+		log.Printf("key '%s' was not found", fullKey)
+		return nil, SecretNotFoundError{Key: fullKey}
 
 	}
 	if err != nil {
@@ -67,7 +69,7 @@ func (r *RedisRepository) GetSecret(ctx context.Context, env, fullKey string) (i
 		if ok {
 			return value, nil
 		} else {
-			return nil, fmt.Errorf("not found value for secret '%s'", fullKey)
+			return nil, SecretNotFoundError{Key: fullKey}
 		}
 	}
 
@@ -140,6 +142,68 @@ func (r *RedisRepository) getValueByNestedKeys(m map[string]interface{}, keys []
 	return val, true
 }
 
+// TODO: test
+func (r *RedisRepository) CloneSecrets(ctx context.Context, cloneEnv, newEnv string) error {
+	matchPattern := r.GetCloneSecretsPatternKey(cloneEnv)
+	oldSegment := fmt.Sprintf(":%s:", cloneEnv)
+	newSegment := fmt.Sprintf(":%s:", newEnv)
+
+	script := `local matchPattern = KEYS[1]
+               local oldSegment = ARGV[1]
+               local newSegment = ARGV[2]
+               local cursor = "0"
+               local done = false
+
+               repeat
+                   local result = redis.call("SCAN", cursor, "MATCH", matchPattern)
+                   cursor = result[1]
+                   local keys = result[2]
+
+                   for i, key in ipairs(keys) do
+                       local value = redis.call("GET", key)
+                       local newKey = string.gsub(key, oldSegment, newSegment)
+                       redis.call("SET", newKey, value)
+                   end
+
+                   if cursor == "0" then
+                       done = true
+                   end
+               until done
+
+               return "Keys duplicated successfully"`
+
+	_, err := r.Client.Eval(ctx, script, []string{matchPattern}, oldSegment, newSegment).Result()
+	if err != nil {
+		err = r.DeleteSecrets(ctx, newEnv)
+		log.Fatalf("Error executing Lua script: %v", err)
+		return err
+	} else {
+		log.Println("Keys duplicated successfully.")
+	}
+
+	return nil
+}
+
+// TODO: test
+func (r *RedisRepository) DeleteSecrets(ctx context.Context, env string) error {
+	luaScript := `
+        local keys = redis.call('keys', ARGV[1])
+        for i=1,#keys do
+            redis.call('del', keys[i])
+        end
+        return #keys
+    `
+
+	keyPattern := r.GetCloneSecretsDeletePatternKey(env)
+	result, err := r.Client.Eval(ctx, luaScript, []string{}, keyPattern).Result()
+	if err != nil {
+		return fmt.Errorf("error executing Lua script for secret deletion: %v", err)
+	}
+
+	log.Printf("Deleted %d secret keys matching the pattern '%s'", result, keyPattern)
+	return nil
+}
+
 func (r *RedisRepository) HealthCheck(ctx context.Context) error {
 	_, err := r.Client.Ping(ctx).Result()
 	if err != nil {
@@ -147,4 +211,20 @@ func (r *RedisRepository) HealthCheck(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (r *RedisRepository) GetCloneSecretsPatternKey(cloneEnv string) string {
+	return fmt.Sprintf("%s:*:%s:*", SecretPrefix, cloneEnv)
+}
+
+func (r *RedisRepository) GetCloneSecretsDeletePatternKey(clonedEnv string) string {
+	return fmt.Sprintf("%s:*:%s:*", SecretPrefix, clonedEnv)
+}
+
+type SecretNotFoundError struct {
+	Key string
+}
+
+func (e SecretNotFoundError) Error() string {
+	return fmt.Sprintf("secret '%s' not found", e.Key)
 }

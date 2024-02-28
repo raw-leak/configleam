@@ -15,17 +15,17 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-type RedisConfigRepositorySuite struct {
+type RedisRepositorySuite struct {
 	suite.Suite
-	repository *repository.RedisConfigRepository
+	repository *repository.RedisRepository
 	client     *redis.Client
 }
 
-func TestRedisConfigRepositorySuite(t *testing.T) {
-	suite.Run(t, new(RedisConfigRepositorySuite))
+func TestRedisRepositorySuite(t *testing.T) {
+	suite.Run(t, new(RedisRepositorySuite))
 }
 
-func (suite *RedisConfigRepositorySuite) SetupSuite() {
+func (suite *RedisRepositorySuite) SetupSuite() {
 	client := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
 	})
@@ -33,16 +33,16 @@ func (suite *RedisConfigRepositorySuite) SetupSuite() {
 	suite.repository = repository.NewRedisRepository(&rds.Redis{Client: client})
 }
 
-func (suite *RedisConfigRepositorySuite) TearDownSuite() {
+func (suite *RedisRepositorySuite) TearDownSuite() {
 	suite.client.Close()
 }
 
-func (suite *RedisConfigRepositorySuite) BeforeTest(testName string) {
+func (suite *RedisRepositorySuite) BeforeTest(testName string) {
 	err := suite.client.FlushAll(context.Background()).Err()
 	assert.NoErrorf(suite.T(), err, "Flushing all data from redis before each test within the test: %s", testName)
 }
 
-func (suite *RedisConfigRepositorySuite) TestUpsertConfig() {
+func (suite *RedisRepositorySuite) TestUpsertConfig() {
 	type testCase struct {
 		name   string
 		env    string
@@ -143,7 +143,7 @@ func (suite *RedisConfigRepositorySuite) TestUpsertConfig() {
 					"group:service1": {
 						Local: map[string]interface{}{
 							"servicePort": 8080,
-							"servicePath": "/api/v1",
+							"servicePath": "/api",
 						},
 						Global: []string{"globalKey1", "globalKey2"},
 					},
@@ -171,7 +171,7 @@ func (suite *RedisConfigRepositorySuite) TestUpsertConfig() {
 				{"complex-config-repo:production:group:service1": map[string]interface{}{
 					"Local": map[string]interface{}{
 						"servicePort": float64(8080),
-						"servicePath": "/api/v1",
+						"servicePath": "/api",
 					},
 					"Global": []interface{}{"globalKey1", "globalKey2"},
 				}},
@@ -205,7 +205,7 @@ func (suite *RedisConfigRepositorySuite) TestUpsertConfig() {
 			if tc.expectedErr {
 				suite.Assert().Error(err)
 				// ensure that NO keys has been generated
-				keys, err := suite.client.Keys(ctx, tc.repo+":"+tc.env+":*").Result()
+				keys, err := suite.client.Keys(ctx, repository.ConfigurationPrefix+":"+tc.repo+":"+tc.env+":*").Result()
 				assert.NoError(suite.T(), err)
 				assert.Equal(suite.T(), 0, len(keys))
 
@@ -216,7 +216,7 @@ func (suite *RedisConfigRepositorySuite) TestUpsertConfig() {
 				// check globals
 				for _, g := range tc.expectedGlobals {
 					for key, expectedValue := range g {
-						val, err := suite.client.Get(ctx, key).Result()
+						val, err := suite.client.Get(ctx, repository.ConfigurationPrefix+":"+key).Result()
 						assert.NoError(suite.T(), err)
 
 						var actualValue interface{}
@@ -230,7 +230,7 @@ func (suite *RedisConfigRepositorySuite) TestUpsertConfig() {
 				// check groups
 				for _, g := range tc.expectedGlobals {
 					for key, expectedValue := range g {
-						val, err := suite.client.Get(ctx, key).Result()
+						val, err := suite.client.Get(ctx, repository.ConfigurationPrefix+":"+key).Result()
 						assert.NoError(suite.T(), err)
 
 						var actualValue interface{}
@@ -244,7 +244,7 @@ func (suite *RedisConfigRepositorySuite) TestUpsertConfig() {
 				// check globals
 				for _, g := range tc.expectedGroups {
 					for key, expectedValue := range g {
-						val, err := suite.client.Get(ctx, key).Result()
+						val, err := suite.client.Get(ctx, repository.ConfigurationPrefix+":"+key).Result()
 						assert.NoError(suite.T(), err)
 
 						var actualValue interface{}
@@ -256,18 +256,25 @@ func (suite *RedisConfigRepositorySuite) TestUpsertConfig() {
 				}
 
 				// ensure only expected keys exist
-				keys, err := suite.client.Keys(ctx, tc.repo+":"+tc.env+":*").Result()
+				keys, err := suite.client.Keys(ctx, repository.ConfigurationPrefix+":"+tc.repo+":"+tc.env+":*").Result()
 				assert.NoError(suite.T(), err)
 				assert.Equal(suite.T(), len(tc.expectedKeys), len(keys))
+
+				expectedFullKeys := []string{}
+				for _, k := range tc.expectedKeys {
+					fullExpectedKey := repository.ConfigurationPrefix + ":" + k
+					expectedFullKeys = append(expectedFullKeys, fullExpectedKey)
+				}
+
 				for _, key := range keys {
-					assert.Contains(suite.T(), tc.expectedKeys, key)
+					suite.Contains(expectedFullKeys, key)
 				}
 			}
 		})
 	}
 }
 
-func (suite *RedisConfigRepositorySuite) TestReadConfig() {
+func (suite *RedisRepositorySuite) TestReadConfig() {
 	type prePopulateData struct {
 		key   string
 		value interface{}
@@ -540,7 +547,8 @@ func (suite *RedisConfigRepositorySuite) TestReadConfig() {
 			for _, data := range tc.prePopulate {
 				value, err := json.Marshal(data.value)
 				suite.Require().NoError(err)
-				err = suite.client.Set(ctx, data.key, value, 0).Err()
+
+				err = suite.client.Set(ctx, repository.ConfigurationPrefix+":"+data.key, value, 0).Err()
 				suite.Require().NoError(err)
 			}
 
@@ -557,7 +565,7 @@ func (suite *RedisConfigRepositorySuite) TestReadConfig() {
 	}
 }
 
-func (suite *RedisConfigRepositorySuite) TestCloneConfig() {
+func (suite *RedisRepositorySuite) TestCloneConfig() {
 	ctx := context.Background()
 	t := suite.T()
 
@@ -809,9 +817,11 @@ func (suite *RedisConfigRepositorySuite) TestCloneConfig() {
 			// Setup initial keys in Redis
 			for k, v := range tc.prePopulate {
 				value, err := json.Marshal(v)
-				assert.NoError(suite.T(), err, "Marshalling pre-populated keys")
+				suite.NoError(err, "Marshalling pre-populated keys")
 
-				err = suite.client.Set(ctx, k, value, 0).Err()
+				fullKey := repository.ConfigurationPrefix + ":" + k
+
+				err = suite.client.Set(ctx, fullKey, value, 0).Err()
 				assert.NoError(t, err, "Setting up keys for test case")
 			}
 
@@ -826,34 +836,46 @@ func (suite *RedisConfigRepositorySuite) TestCloneConfig() {
 
 			// Verify expected keys are created with correct values
 			for expectedKey, expectedValue := range tc.expectedKeys {
+				fullExpectedKey := repository.ConfigurationPrefix + ":" + expectedKey
+
 				var actualValue interface{}
-				val, err := suite.client.Get(ctx, expectedKey).Result()
+				val, err := suite.client.Get(ctx, fullExpectedKey).Result()
 				assert.NoError(suite.T(), err)
 
 				err = json.Unmarshal([]byte(val), &actualValue)
 				assert.NoError(suite.T(), err)
 
 				assert.NoError(t, err, "Fetching cloned key")
-				assert.Equal(t, expectedValue, actualValue, fmt.Sprintf("Value mismatch for key %s", expectedKey))
+				assert.Equal(t, expectedValue, actualValue, fmt.Sprintf("Value mismatch for key %s", fullExpectedKey))
 			}
 
 			// Verify that original keys has not been changed
 			for originalKey, originalValue := range tc.prePopulate {
+				fullOriginalKey := repository.ConfigurationPrefix + ":" + originalKey
 				var actualValue interface{}
-				val, err := suite.client.Get(ctx, originalKey).Result()
+				val, err := suite.client.Get(ctx, fullOriginalKey).Result()
 				assert.NoError(suite.T(), err)
 
 				err = json.Unmarshal([]byte(val), &actualValue)
 				assert.NoError(suite.T(), err)
 
 				assert.NoError(t, err, "Fetching cloned key")
-				assert.Equal(t, originalValue, actualValue, fmt.Sprintf("Value mismatch for key %s", originalKey))
+				assert.Equal(t, originalValue, actualValue, fmt.Sprintf("Value mismatch for key %s", fullOriginalKey))
 			}
 
 			// Verify that the the existing keys are the expected
 			allKeys, err := suite.client.Keys(ctx, "*").Result()
 			assert.NoError(t, err, "Fetching all keys")
-			assert.ElementsMatch(t, allKeys, tc.expectedAllKeys, fmt.Sprintf("Value mismatch for all generated keys %v", tc.expectedAllKeys))
+			expectedFullKeys := []string{}
+
+			for _, k := range tc.expectedAllKeys {
+				fullExpectedKey := repository.ConfigurationPrefix + ":" + k
+				expectedFullKeys = append(expectedFullKeys, fullExpectedKey)
+			}
+
+			assert.ElementsMatch(t, allKeys, expectedFullKeys, fmt.Sprintf("Value mismatch for all generated keys %v", tc.expectedAllKeys))
 		})
 	}
 }
+
+// TODO: test delete config

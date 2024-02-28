@@ -12,45 +12,46 @@ import (
 	"github.com/raw-leak/configleam/internal/app/secrets/service"
 )
 
-// MockRepository is a mock implementation of the Repository interface
 type MockRepository struct {
 	mock.Mock
 }
 
-// GetSecret is a mock implementation of the GetSecret method
 func (m *MockRepository) GetSecret(ctx context.Context, env string, key string) (interface{}, error) {
 	args := m.Called(ctx, env, key)
 	return args.String(0), args.Error(1)
 }
 
-// UpsertSecrets is a mock implementation of the UpsertSecrets method
 func (m *MockRepository) UpsertSecrets(ctx context.Context, env string, secrets map[string]interface{}) error {
 	args := m.Called(ctx, env, secrets)
 	return args.Error(1)
 }
 
-// HealthCheck is a mock implementation of the HealthCheck method
 func (m *MockRepository) HealthCheck(ctx context.Context) error {
 	args := m.Called(ctx)
 	return args.Error(1)
 }
 
-type ConfigleamSecretsSuite struct {
+func (m *MockRepository) CloneSecrets(ctx context.Context, env, newEnv string) error {
+	args := m.Called(ctx, env, newEnv)
+	return args.Error(1)
+}
+
+type SecretsSuite struct {
 	suite.Suite
 	secrets    service.SecretsService
 	repository *MockRepository
 }
 
-func TestConfigleamSecretsSuite(t *testing.T) {
-	suite.Run(t, new(ConfigleamSecretsSuite))
+func TestSecretsSuite(t *testing.T) {
+	suite.Run(t, new(SecretsSuite))
 }
 
-func (suite *ConfigleamSecretsSuite) SetupSuite() {
+func (suite *SecretsSuite) SetupSuite() {
 	suite.repository = &MockRepository{}
 	suite.secrets = *service.New(suite.repository)
 }
 
-func (suite *ConfigleamSecretsSuite) TestInsertSecrets() {
+func (suite *SecretsSuite) TestInsertSecrets() {
 	t := suite.T()
 
 	type GetSecretMock struct {
@@ -63,13 +64,15 @@ func (suite *ConfigleamSecretsSuite) TestInsertSecrets() {
 		name          string
 		env           string
 		inputCfg      map[string]interface{}
+		populate      bool
 		expectedCfg   map[string]interface{}
 		expectedErr   error
 		GetSecretMock []GetSecretMock
 	}{
 		{
-			name: "Replace well defined secret in a map",
-			env:  "develop",
+			name:     "Replace well defined secret in a map",
+			env:      "develop",
+			populate: true,
 			GetSecretMock: []GetSecretMock{
 				{key: "test", value: "test-value"},
 			},
@@ -82,8 +85,9 @@ func (suite *ConfigleamSecretsSuite) TestInsertSecrets() {
 			expectedErr: nil,
 		},
 		{
-			name: "Replace with spaces on the left secret in a map",
-			env:  "develop",
+			name:     "Replace with spaces on the left secret in a map",
+			env:      "develop",
+			populate: true,
 			GetSecretMock: []GetSecretMock{
 				{key: "test", value: "test-value"},
 			},
@@ -96,8 +100,9 @@ func (suite *ConfigleamSecretsSuite) TestInsertSecrets() {
 			expectedErr: nil,
 		},
 		{
-			name: "Replace with spaces on the right secret in a map",
-			env:  "develop",
+			name:     "Replace with spaces on the right secret in a map",
+			env:      "develop",
+			populate: true,
 			GetSecretMock: []GetSecretMock{
 				{key: "test", value: "test-value"},
 			},
@@ -110,8 +115,9 @@ func (suite *ConfigleamSecretsSuite) TestInsertSecrets() {
 			expectedErr: nil,
 		},
 		{
-			name: "Replace with spaces on the right and left secret in a map",
-			env:  "develop",
+			name:     "Replace with spaces on the right and left secret in a map",
+			env:      "develop",
+			populate: true,
 			GetSecretMock: []GetSecretMock{
 				{key: "test", value: "test-value"},
 			},
@@ -124,8 +130,9 @@ func (suite *ConfigleamSecretsSuite) TestInsertSecrets() {
 			expectedErr: nil,
 		},
 		{
-			name: "Replace multiple secret in a map where secrets are simple strings",
-			env:  "develop",
+			name:     "Replace multiple secret in a map where secrets are simple strings",
+			env:      "develop",
+			populate: true,
 			GetSecretMock: []GetSecretMock{
 				{key: "test1", value: "test-value-1"},
 				{key: "test2", value: "test-value-2"},
@@ -144,8 +151,9 @@ func (suite *ConfigleamSecretsSuite) TestInsertSecrets() {
 			expectedErr: nil,
 		},
 		{
-			name: "Simple map with nested secrets",
-			env:  "develop",
+			name:     "Simple map with nested secrets",
+			env:      "develop",
+			populate: true,
 			GetSecretMock: []GetSecretMock{
 				{key: "test1", value: "test-value-1"},
 				{key: "test2", value: "test-value-2"},
@@ -165,8 +173,9 @@ func (suite *ConfigleamSecretsSuite) TestInsertSecrets() {
 			expectedErr: nil,
 		},
 		{
-			name: "Simple map with array of secrets",
-			env:  "develop",
+			name:     "Simple map with array of secrets",
+			env:      "develop",
+			populate: true,
 			GetSecretMock: []GetSecretMock{
 				{key: "test1", value: "test-value-1"},
 				{key: "test2", value: "test-value-2"},
@@ -185,8 +194,9 @@ func (suite *ConfigleamSecretsSuite) TestInsertSecrets() {
 			},
 			expectedErr: nil,
 		}, {
-			name: "Invalid secret placeholder format (end)",
-			env:  "develop",
+			name:     "Invalid secret placeholder format (end)",
+			env:      "develop",
+			populate: true,
 			inputCfg: map[string]interface{}{
 				"invalid-secret": "{{secret.invalid-secret}",
 			},
@@ -196,8 +206,9 @@ func (suite *ConfigleamSecretsSuite) TestInsertSecrets() {
 			expectedErr: nil,
 		},
 		{
-			name: "Invalid secret placeholder format (init)",
-			env:  "develop",
+			name:     "Invalid secret placeholder format (init)",
+			env:      "develop",
+			populate: true,
 			inputCfg: map[string]interface{}{
 				"invalid-secret": "{secret.invalid-secret}}",
 			},
@@ -207,8 +218,9 @@ func (suite *ConfigleamSecretsSuite) TestInsertSecrets() {
 			expectedErr: nil,
 		},
 		{
-			name: "Input config without secrets",
-			env:  "develop",
+			name:     "Input config without secrets",
+			env:      "develop",
+			populate: true,
 			inputCfg: map[string]interface{}{
 				"key1": "value1",
 				"key2": "value2",
@@ -220,8 +232,9 @@ func (suite *ConfigleamSecretsSuite) TestInsertSecrets() {
 			expectedErr: nil,
 		},
 		{
-			name: "Non-string value",
-			env:  "develop",
+			name:     "Non-string value",
+			env:      "develop",
+			populate: true,
 			inputCfg: map[string]interface{}{
 				"int-value":  42,
 				"bool-value": true,
@@ -233,8 +246,9 @@ func (suite *ConfigleamSecretsSuite) TestInsertSecrets() {
 			expectedErr: nil,
 		},
 		{
-			name: "Complex scenario with nested structures",
-			env:  "develop",
+			name:     "Complex scenario with nested structures",
+			env:      "develop",
+			populate: true,
 			inputCfg: map[string]interface{}{
 				"key1": "value1",
 				"key2": map[string]interface{}{
@@ -297,8 +311,9 @@ func (suite *ConfigleamSecretsSuite) TestInsertSecrets() {
 			expectedErr: nil,
 		},
 		{
-			name: "Very nested complex scenario",
-			env:  "develop",
+			name:     "Very nested complex scenario",
+			env:      "develop",
+			populate: true,
 			inputCfg: map[string]interface{}{
 				"key1": "value1",
 				"key2": map[string]interface{}{
@@ -392,8 +407,9 @@ func (suite *ConfigleamSecretsSuite) TestInsertSecrets() {
 			expectedErr: nil,
 		},
 		{
-			name: "Single secrets replacement with one error",
-			env:  "develop",
+			name:     "Single secrets replacement with one error",
+			env:      "develop",
+			populate: true,
 			GetSecretMock: []GetSecretMock{
 				{key: "test", value: "", err: errors.New("some error")},
 			},
@@ -406,8 +422,9 @@ func (suite *ConfigleamSecretsSuite) TestInsertSecrets() {
 			expectedErr: errors.New("some error"),
 		},
 		{
-			name: "Multiple secrets replacement with one error",
-			env:  "develop",
+			name:     "Multiple secrets replacement with one error",
+			env:      "develop",
+			populate: true,
 			GetSecretMock: []GetSecretMock{
 				{key: "test1", value: "test-value-1", err: nil},
 				{key: "test2", value: "", err: errors.New("error retrieving test2")},
@@ -435,7 +452,7 @@ func (suite *ConfigleamSecretsSuite) TestInsertSecrets() {
 				suite.repository.On("GetSecret", ctx, tc.env, mock.key).Return(mock.value, mock.err).Once()
 			}
 
-			err := suite.secrets.InsertSecrets(ctx, tc.env, &tc.inputCfg)
+			err := suite.secrets.InsertSecrets(ctx, tc.env, &tc.inputCfg, tc.populate)
 
 			// Assert error, if expected
 			if tc.expectedErr != nil {

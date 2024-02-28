@@ -14,7 +14,7 @@ import (
 
 type ConfigurationSet struct {
 	*service.ConfigurationService
-	*controller.ConfigleamEndpoints
+	*controller.ConfigurationEndpoints
 }
 
 func Init(ctx context.Context, cfg *config.Config, secrets service.Secrets) (*ConfigurationSet, error) {

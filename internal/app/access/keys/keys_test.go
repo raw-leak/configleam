@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/raw-leak/configleam/internal/app/configleam-access/keys"
+	"github.com/raw-leak/configleam/internal/app/access/keys"
 	"github.com/stretchr/testify/suite"
 )
 

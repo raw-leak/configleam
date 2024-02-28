@@ -3,7 +3,7 @@ package dto_test
 import (
 	"testing"
 
-	"github.com/raw-leak/configleam/internal/app/configleam-access/dto"
+	"github.com/raw-leak/configleam/internal/app/access/dto"
 	"github.com/raw-leak/configleam/internal/pkg/permissions"
 	"github.com/stretchr/testify/suite"
 )

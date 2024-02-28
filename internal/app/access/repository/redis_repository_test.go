@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/raw-leak/configleam/internal/app/configleam-access/keys"
-	"github.com/raw-leak/configleam/internal/app/configleam-access/repository"
+	"github.com/raw-leak/configleam/internal/app/access/keys"
+	"github.com/raw-leak/configleam/internal/app/access/repository"
 	"github.com/raw-leak/configleam/internal/pkg/encryptor"
 	"github.com/raw-leak/configleam/internal/pkg/permissions"
 	rds "github.com/raw-leak/configleam/internal/pkg/redis"
@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-type RedisConfigleamAccessRepositorySuite struct {
+type RedisAccessRepositorySuite struct {
 	suite.Suite
 
 	repository *repository.RedisRepository
@@ -29,10 +29,10 @@ type RedisConfigleamAccessRepositorySuite struct {
 }
 
 func TestRedisRepositorySuite(t *testing.T) {
-	suite.Run(t, new(RedisConfigleamAccessRepositorySuite))
+	suite.Run(t, new(RedisAccessRepositorySuite))
 }
 
-func (suite *RedisConfigleamAccessRepositorySuite) SetupSuite() {
+func (suite *RedisAccessRepositorySuite) SetupSuite() {
 	var err error
 
 	suite.client = redis.NewClient(&redis.Options{
@@ -46,17 +46,17 @@ func (suite *RedisConfigleamAccessRepositorySuite) SetupSuite() {
 	suite.repository = repository.NewRedisRepository(&rds.Redis{Client: suite.client}, suite.encryptor)
 }
 
-func (suite *RedisConfigleamAccessRepositorySuite) TearDownSuite() {
+func (suite *RedisAccessRepositorySuite) TearDownSuite() {
 	suite.client.Close()
 }
 
-func (suite *RedisConfigleamAccessRepositorySuite) BeforeTest(testName string) {
+func (suite *RedisAccessRepositorySuite) BeforeTest(testName string) {
 	err := suite.client.FlushAll(context.Background()).Err()
 	suite.Require().NoError(err)
 	suite.Require().NoErrorf(err, "Flushing all data from redis before each test within the test: %s", testName)
 }
 
-func (suite *RedisConfigleamAccessRepositorySuite) TestStoreAccessKey() {
+func (suite *RedisAccessRepositorySuite) TestStoreAccessKey() {
 	ctx := context.Background()
 
 	testCases := []struct {
@@ -150,7 +150,7 @@ func (suite *RedisConfigleamAccessRepositorySuite) TestStoreAccessKey() {
 	}
 }
 
-func (suite *RedisConfigleamAccessRepositorySuite) TestGetAccessKeyPermissions() {
+func (suite *RedisAccessRepositorySuite) TestGetAccessKeyPermissions() {
 	type prePopulateData struct {
 		key   string
 		value permissions.AccessKeyPermissions
@@ -316,7 +316,7 @@ func (suite *RedisConfigleamAccessRepositorySuite) TestGetAccessKeyPermissions()
 	}
 }
 
-func (suite *RedisConfigleamAccessRepositorySuite) TestRemoveKeys() {
+func (suite *RedisAccessRepositorySuite) TestRemoveKeys() {
 	type prePopulateData struct {
 		key   string
 		value permissions.AccessKeyPermissions
@@ -513,7 +513,7 @@ func (suite *RedisConfigleamAccessRepositorySuite) TestRemoveKeys() {
 	}
 }
 
-func (suite *RedisConfigleamAccessRepositorySuite) TestPaginateAccessKeys() {
+func (suite *RedisAccessRepositorySuite) TestPaginateAccessKeys() {
 	ctx := context.Background()
 
 	sampleAccessKeys := []repository.AccessKey{

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/raw-leak/configleam/internal/app/access/dto"
-	"github.com/raw-leak/configleam/internal/pkg/auth/templates"
 	"github.com/raw-leak/configleam/internal/pkg/permissions"
 )
 
@@ -43,11 +42,11 @@ type AuthMiddleware struct {
 }
 
 // NewAuthMiddleware creates a new instance of AuthMiddleware
-func NewAuthMiddleware(access AccessService, perms PermissionsBuilder) *AuthMiddleware {
+func NewAuthMiddleware(access AccessService, perms PermissionsBuilder, templates Templates) *AuthMiddleware {
 	return &AuthMiddleware{
 		access:    access,
 		perms:     perms,
-		templates: templates.New(),
+		templates: templates,
 	}
 }
 
@@ -68,17 +67,17 @@ func (m *AuthMiddleware) Guard(requiredPermission permissions.Operation) func(ht
 				return
 			}
 			if !ok {
-				http.Error(w, "Error checking permissions", http.StatusInternalServerError)
+				http.Error(w, "Forbidden", http.StatusForbidden)
 				return
 			}
 
 			hasPermission := accessKeyPerms.Can(query.Get("env"), requiredPermission)
 			if !hasPermission {
-				http.Error(w, "Insufficient permissions", http.StatusForbidden)
+				http.Error(w, "Forbidden", http.StatusForbidden)
 				return
 			}
 
-			ctxWithPermissions := context.WithValue(r.Context(), AccessKeyContextKey{}, &accessKeyPerms)
+			ctxWithPermissions := context.WithValue(r.Context(), AccessKeyContextKey{}, *accessKeyPerms)
 			r = r.WithContext(ctxWithPermissions)
 
 			next.ServeHTTP(w, r)
@@ -172,7 +171,7 @@ func (m *AuthMiddleware) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		http.SetCookie(w, &http.Cookie{
 			Name:  AccessKeyCookies,
 			Value: accessKey.AccessKey,
-			Path:  "v1/dashboard",
+			Path:  "dashboard",
 			// HttpOnly: true,
 			// Secure:   true,
 			SameSite: http.SameSiteStrictMode,
@@ -181,7 +180,7 @@ func (m *AuthMiddleware) LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	http.Redirect(w, r, "/v1/dashboard", http.StatusSeeOther)
+	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 }
 
 func (m AuthMiddleware) LogoutHandler(w http.ResponseWriter, r *http.Request) {
@@ -199,16 +198,16 @@ func (m AuthMiddleware) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:    AccessKeyCookies,
 		Value:   cookie.Value,
-		Path:    "v1/dashboard",
+		Path:    "dashboard",
 		Expires: time.Unix(0, 0),
 		MaxAge:  -1,
 	})
 
 	err = m.access.DeleteAccessKeys(r.Context(), []string{cookie.Value})
 	if err != nil {
-		http.Redirect(w, r, "/v1/dashboard", http.StatusSeeOther)
+		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 		return
 	}
 
-	http.Redirect(w, r, "/v1/dashboard", http.StatusSeeOther)
+	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 }
