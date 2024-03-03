@@ -3,6 +3,7 @@ package repository_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -878,4 +879,412 @@ func (suite *RedisRepositorySuite) TestCloneConfig() {
 	}
 }
 
-// TODO: test delete config
+func (suite *RedisRepositorySuite) TestAddEnv() {
+	ctx := context.Background()
+
+	testCases := []struct {
+		name           string
+		envName        string
+		params         repository.EnvParams
+		prePopulate    map[string]interface{}
+		expectedParams map[string]string
+		expectError    bool
+		expectedError  error
+	}{
+		{
+			name:    "Add environment metadata successfully",
+			envName: "test-env",
+			params: repository.EnvParams{
+				Name:     "test-name",
+				Version:  "test-version",
+				Clone:    true,
+				Original: "test-original",
+			},
+			prePopulate: map[string]interface{}{},
+			expectedParams: map[string]string{
+				"name":     "test-name",
+				"version":  "test-version",
+				"clone":    "1",
+				"original": "test-original",
+			},
+			expectError:   false,
+			expectedError: nil,
+		},
+		{
+			name:    "Add environment metadata successfully",
+			envName: "test-env",
+			params: repository.EnvParams{
+				Name:     "test-name",
+				Version:  "test-version",
+				Clone:    true,
+				Original: "test-original",
+			},
+			prePopulate: map[string]interface{}{},
+			expectedParams: map[string]string{
+				"name":     "test-name",
+				"version":  "test-version",
+				"clone":    "1",
+				"original": "test-original",
+			},
+			expectError:   false,
+			expectedError: nil,
+		},
+		{
+			name:    "Add environment metadata with empty name",
+			envName: "",
+			params: repository.EnvParams{
+				Name:     "",
+				Version:  "test-version",
+				Clone:    false,
+				Original: "test-original",
+			},
+			prePopulate:    map[string]interface{}{},
+			expectedParams: map[string]string{},
+			expectError:    true,
+			expectedError:  errors.New("environment name cannot be empty"),
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.BeforeTest(tc.name)
+
+			for k, v := range tc.prePopulate {
+				value, err := json.Marshal(v)
+				suite.NoError(err, "Marshalling pre-populated keys")
+
+				fullKey := suite.repository.GetEnvKey(k)
+
+				err = suite.client.HMSet(ctx, fullKey, value, 0).Err()
+				suite.NoError(err, "Setting up keys for test case")
+			}
+
+			err := suite.repository.AddEnv(ctx, tc.envName, tc.params)
+			if tc.expectError {
+				suite.Error(err, "Expected an error")
+				suite.Equal(tc.expectedError, err, "Error mismatch")
+			} else {
+				suite.NoError(err, "Expected no error")
+			}
+
+			fullExpectedKey := suite.repository.GetEnvKey(tc.envName)
+
+			actualParams, err := suite.client.HGetAll(ctx, suite.repository.GetEnvKey(tc.envName)).Result()
+			suite.NoError(err)
+
+			suite.Equal(tc.expectedParams, actualParams, fmt.Sprintf("Value mismatch for key %s", fullExpectedKey))
+		})
+	}
+}
+
+func (suite *RedisRepositorySuite) TestDeleteEnv() {
+	ctx := context.Background()
+
+	testCases := []struct {
+		name        string
+		envName     string
+		prePopulate map[string]string
+		expectError bool
+		expectedErr error
+	}{
+		{
+			name:        "Remove environment metadata successfully",
+			envName:     "test-env",
+			prePopulate: map[string]string{"test-env:name": "test-name", "test-env:version": "test-version"},
+			expectError: false,
+			expectedErr: nil,
+		},
+		{
+			name:        "Remove non-existing environment metadata",
+			envName:     "non-existing-env",
+			prePopulate: map[string]string{},
+			expectError: false,
+			expectedErr: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.BeforeTest(tc.name)
+
+			for k, v := range tc.prePopulate {
+				value, err := json.Marshal(v)
+				suite.NoError(err, "Marshalling pre-populated keys")
+
+				fullKey := suite.repository.GetEnvKey(k)
+
+				err = suite.client.HMSet(ctx, fullKey, value, 0).Err()
+				suite.NoError(err, "Setting up keys for test case")
+			}
+
+			err := suite.repository.DeleteEnv(ctx, tc.envName)
+
+			if tc.expectError {
+				suite.Error(err, "Expected an error")
+				suite.Equal(tc.expectedErr, err, "Error mismatch")
+			} else {
+				suite.NoError(err, "Expected no error")
+			}
+
+			// Verify that the key is removed from Redis
+			exists, err := suite.client.Exists(ctx, suite.repository.GetEnvKey(tc.envName)).Result()
+			suite.NoError(err)
+			suite.Equal(int64(0), exists, "Expected key to be removed from Redis")
+		})
+	}
+}
+
+func (suite *RedisRepositorySuite) TestGetEnvOriginal() {
+	ctx := context.Background()
+
+	testCases := []struct {
+		name        string
+		envName     string
+		prePopulate map[string]string
+		expectError bool
+		expectedOk  bool
+		expectedErr error
+		expectedVal string
+	}{
+		{
+			name:        "Get original environment value successfully",
+			envName:     "test-env",
+			prePopulate: map[string]string{"name": "test-name", "version": "test-version", "original": "test-original"},
+			expectError: false,
+			expectedOk:  true,
+			expectedErr: nil,
+			expectedVal: "test-original",
+		},
+		{
+			name:        "Get original value of non-existing environment",
+			envName:     "non-existing-env",
+			prePopulate: nil,
+			expectError: false,
+			expectedOk:  false,
+			expectedErr: nil,
+			expectedVal: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.BeforeTest(tc.name)
+
+			if tc.prePopulate != nil {
+				err := suite.client.HMSet(ctx, suite.repository.GetEnvKey(tc.envName), tc.prePopulate).Err()
+				suite.NoError(err, "Setting up keys for test case")
+			}
+
+			originalVal, ok, err := suite.repository.GetEnvOriginal(ctx, tc.envName)
+			suite.Equal(tc.expectedOk, ok, "Ok mismatch")
+
+			if tc.expectError {
+				suite.Error(err, "Expected an error")
+				suite.Equal(tc.expectedErr, err, "Error mismatch")
+			} else {
+				suite.NoError(err, "Expected no error")
+				suite.Equal(tc.expectedVal, originalVal, "Original value mismatch")
+			}
+		})
+	}
+}
+
+func (suite *RedisRepositorySuite) TestSetEnvVersion() {
+	ctx := context.Background()
+
+	testCases := []struct {
+		name            string
+		envName         string
+		version         string
+		prePopulate     map[string]string
+		expectError     bool
+		expectedErr     error
+		expectedVersion string
+	}{
+		{
+			name:            "Set environment version successfully",
+			envName:         "test-env",
+			version:         "1.0.0",
+			prePopulate:     map[string]string{"name": "test-name", "original": "test-original"},
+			expectError:     false,
+			expectedErr:     nil,
+			expectedVersion: "1.0.0",
+		},
+		{
+			name:            "Set environment version for non-existing environment",
+			envName:         "non-existing-env",
+			version:         "1.0.0",
+			prePopulate:     nil,
+			expectError:     false,
+			expectedErr:     nil,
+			expectedVersion: "1.0.0",
+		},
+		{
+			name:            "Set environment version with empty environment name",
+			envName:         "",
+			version:         "1.0.0",
+			prePopulate:     nil,
+			expectError:     true,
+			expectedErr:     errors.New("environment name cannot be empty"),
+			expectedVersion: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.BeforeTest(tc.name)
+
+			if tc.prePopulate != nil {
+				err := suite.client.HMSet(ctx, suite.repository.GetEnvKey(tc.envName), tc.prePopulate).Err()
+				suite.NoError(err, "Setting up keys for test case")
+			}
+
+			err := suite.repository.SetEnvVersion(ctx, tc.envName, tc.version)
+			if tc.expectError {
+				suite.Error(err, "Expected an error")
+				suite.Equal(tc.expectedErr, err, "Error mismatch")
+			} else {
+				suite.NoError(err, "Expected no error")
+
+				actualVersion, err := suite.client.HGet(ctx, suite.repository.GetEnvKey(tc.envName), "version").Result()
+				suite.NoError(err, "Failed to get version from Redis")
+				suite.Equal(tc.expectedVersion, actualVersion, "Version mismatch")
+			}
+		})
+	}
+}
+
+func (suite *RedisRepositorySuite) TestGetEnvParams() {
+	ctx := context.Background()
+
+	testCases := []struct {
+		name           string
+		envName        string
+		prePopulate    map[string]string
+		expectError    bool
+		expectedErr    error
+		expectedParams repository.EnvParams
+	}{
+		{
+			name:           "Get environment params successfully",
+			envName:        "test-env",
+			prePopulate:    map[string]string{"version": "1.0.0", "clone": "1", "original": "test-original", "name": "test-env"},
+			expectError:    false,
+			expectedErr:    nil,
+			expectedParams: repository.EnvParams{Name: "test-env", Version: "1.0.0", Clone: true, Original: "test-original"},
+		},
+		{
+			name:           "Get environment params with empty key",
+			envName:        "",
+			prePopulate:    nil,
+			expectError:    true,
+			expectedErr:    errors.New("environment name cannot be empty"),
+			expectedParams: repository.EnvParams{},
+		},
+		{
+			name:           "Get environment params with non-existing key",
+			envName:        "non-existing-key",
+			prePopulate:    nil,
+			expectError:    true,
+			expectedErr:    repository.EnvNotFoundError{Key: "non-existing-key"},
+			expectedParams: repository.EnvParams{},
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.BeforeTest(tc.name)
+
+			if tc.prePopulate != nil {
+				err := suite.client.HMSet(ctx, suite.repository.GetEnvKey(tc.envName), tc.prePopulate).Err()
+				suite.NoError(err, "Setting up keys for test case")
+			}
+
+			params, err := suite.repository.GetEnvParams(ctx, tc.envName)
+			if tc.expectError {
+				suite.Error(err, "Expected an error")
+				suite.Equal(tc.expectedErr, err, "Error mismatch")
+			} else {
+				suite.NoError(err, "Expected no error")
+				suite.Equal(tc.expectedParams, params, "Params mismatch")
+			}
+		})
+	}
+}
+
+func (suite *RedisRepositorySuite) TestGetAllEnvs() {
+	ctx := context.Background()
+
+	testCases := []struct {
+		name           string
+		keys           []string
+		prePopulate    map[string]map[string]string
+		expectedParams []repository.EnvParams
+		expectError    bool
+		expectedErr    error
+	}{
+		{
+			name: "Get all environments successfully where there are only no cloned environments",
+			prePopulate: map[string]map[string]string{
+				"develop":    {"name": "develop", "version": "1.0.0", "clone": "0"},
+				"release":    {"name": "release", "version": "2.0.0", "clone": "0"},
+				"production": {"name": "production", "version": "3.0.0", "clone": "0"},
+			},
+			expectedParams: []repository.EnvParams{
+				{Name: "develop", Version: "1.0.0", Clone: false},
+				{Name: "release", Version: "2.0.0", Clone: false},
+				{Name: "production", Version: "3.0.0", Clone: false},
+			},
+			expectError: false,
+			expectedErr: nil,
+		},
+		{
+			name: "Get all environments successfully where there are cloned and not environments",
+			prePopulate: map[string]map[string]string{
+				"develop":         {"name": "develop", "version": "2.0.0", "clone": "0"},
+				"develop-clone-1": {"name": "develop-clone-1", "version": "1.0.0", "clone": "1", "original": "develop"},
+				"develop-clone-2": {"name": "develop-clone-2", "version": "2.0.0", "clone": "1", "original": "develop"},
+				"release":         {"name": "release", "version": "2.0.0", "clone": "0"},
+				"production":      {"name": "production", "version": "3.0.0", "clone": "0"},
+			},
+			expectedParams: []repository.EnvParams{
+				{Name: "develop", Version: "2.0.0", Clone: false},
+				{Name: "develop-clone-1", Version: "1.0.0", Clone: true, Original: "develop"},
+				{Name: "develop-clone-2", Version: "2.0.0", Clone: true, Original: "develop"},
+				{Name: "release", Version: "2.0.0", Clone: false},
+				{Name: "production", Version: "3.0.0", Clone: false},
+			},
+			expectError: false,
+			expectedErr: nil,
+		},
+		{
+			name:           "No environments found",
+			prePopulate:    map[string]map[string]string{},
+			expectedParams: []repository.EnvParams{},
+			expectError:    false,
+			expectedErr:    nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.BeforeTest(tc.name)
+
+			if tc.prePopulate != nil {
+				for envName, m := range tc.prePopulate {
+					err := suite.client.HMSet(ctx, suite.repository.GetEnvKey(envName), m).Err()
+					suite.NoError(err, "Setting up keys for test case")
+				}
+			}
+
+			params, err := suite.repository.GetAllEnvs(ctx)
+			if tc.expectError {
+				suite.Error(err, "Expected an error")
+				suite.Equal(tc.expectedErr, err, "Error mismatch")
+			} else {
+				suite.NoError(err, "Expected no error")
+				suite.ElementsMatch(tc.expectedParams, params, "Params mismatch")
+			}
+		})
+	}
+}

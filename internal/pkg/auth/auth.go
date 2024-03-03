@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"os"
 	"time"
@@ -25,6 +26,11 @@ type AccessService interface {
 	DeleteAccessKeys(ctx context.Context, keys []string) error
 }
 
+type ConfigurationService interface {
+	GetEnvOriginal(ctx context.Context, env string) (string, bool, error)
+	IsEnvOriginal(ctx context.Context, env string) bool
+}
+
 type Templates interface {
 	Login(w http.ResponseWriter, errMsg string)
 	LoginError(w http.ResponseWriter, errMsg string)
@@ -36,17 +42,19 @@ type PermissionsBuilder interface {
 
 // AuthMiddleware holds the service needed to validate permissions
 type AuthMiddleware struct {
-	access    AccessService
-	perms     PermissionsBuilder
-	templates Templates
+	configuration ConfigurationService
+	access        AccessService
+	perms         PermissionsBuilder
+	templates     Templates
 }
 
 // NewAuthMiddleware creates a new instance of AuthMiddleware
-func NewAuthMiddleware(access AccessService, perms PermissionsBuilder, templates Templates) *AuthMiddleware {
+func NewAuthMiddleware(access AccessService, configuration ConfigurationService, perms PermissionsBuilder, templates Templates) *AuthMiddleware {
 	return &AuthMiddleware{
-		access:    access,
-		perms:     perms,
-		templates: templates,
+		access:        access,
+		configuration: configuration,
+		perms:         perms,
+		templates:     templates,
 	}
 }
 
@@ -57,13 +65,14 @@ func (m *AuthMiddleware) Guard(requiredPermission permissions.Operation) func(ht
 			accessKey, query := r.Header.Get(AccessKeyHeader), r.URL.Query()
 
 			if accessKey == "" {
-				http.Error(w, "Access key required", http.StatusUnauthorized)
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
 
 			accessKeyPerms, ok, err := m.access.GetAccessKeyPermissions(r.Context(), accessKey)
 			if err != nil {
-				http.Error(w, "Error checking permissions", http.StatusInternalServerError)
+				log.Println(w, "Error checking permissions")
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 				return
 			}
 			if !ok {
@@ -71,8 +80,22 @@ func (m *AuthMiddleware) Guard(requiredPermission permissions.Operation) func(ht
 				return
 			}
 
-			hasPermission := accessKeyPerms.Can(query.Get("env"), requiredPermission)
-			if !hasPermission {
+			env := query.Get("env")
+			if !m.configuration.IsEnvOriginal(r.Context(), env) {
+				orgEnv, ok, err := m.configuration.GetEnvOriginal(r.Context(), env)
+				if err != nil {
+					log.Println(w, "Error reading original env:", err)
+					http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+					return
+				}
+				if !ok {
+					http.Error(w, "Forbidden", http.StatusForbidden)
+					return
+				}
+				env = orgEnv
+			}
+
+			if !accessKeyPerms.Can(env, requiredPermission) {
 				http.Error(w, "Forbidden", http.StatusForbidden)
 				return
 			}

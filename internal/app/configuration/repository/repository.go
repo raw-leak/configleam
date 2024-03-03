@@ -4,9 +4,25 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/raw-leak/configleam/internal/app/configuration/service"
+	"github.com/raw-leak/configleam/internal/app/configuration/types"
 	rds "github.com/raw-leak/configleam/internal/pkg/redis"
 )
+
+type Repository interface {
+	CloneConfig(ctx context.Context, env, newEnv string, updateGlobals map[string]interface{}) error
+	ReadConfig(ctx context.Context, env string, groups, globalKeys []string) (map[string]interface{}, error)
+	UpsertConfig(ctx context.Context, env string, gitRepoName string, config *types.ParsedRepoConfig) error
+	DeleteConfig(ctx context.Context, env string, gitRepoName string) error
+
+	AddEnv(ctx context.Context, envName string, params EnvParams) error
+	DeleteEnv(ctx context.Context, envName string) error
+	GetEnvOriginal(ctx context.Context, envName string) (string, bool, error)
+	SetEnvVersion(ctx context.Context, envName string, version string) error
+	GetAllEnvs(ctx context.Context) ([]EnvParams, error)
+	GetEnvParams(ctx context.Context, envName string) (EnvParams, error)
+
+	HealthCheck(ctx context.Context) error
+}
 
 type RepositoryConfig struct {
 	RedisAddrs    string
@@ -18,7 +34,7 @@ type RepositoryConfig struct {
 	EtcdPassword string
 }
 
-func New(ctx context.Context, cfg RepositoryConfig) (service.Repository, error) {
+func New(ctx context.Context, cfg RepositoryConfig) (Repository, error) {
 	if cfg.RedisAddrs == "" {
 		return nil, fmt.Errorf("RedisAddress is no provided")
 	}

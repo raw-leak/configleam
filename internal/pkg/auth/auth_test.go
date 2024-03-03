@@ -2,6 +2,7 @@ package auth_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,10 +16,11 @@ import (
 
 type AuthMiddlewareTestSuite struct {
 	suite.Suite
-	access     *MockAccessService
-	templates  *MockTemplates
-	perms      httpserver.PermissionsBuilder
-	authMiddle *auth.AuthMiddleware
+	configuration *MockConfigurationService
+	access        *MockAccessService
+	templates     *MockTemplates
+	perms         httpserver.PermissionsBuilder
+	authMiddle    *auth.AuthMiddleware
 }
 
 type MockTemplates struct {
@@ -52,6 +54,20 @@ func (m *MockAccessService) DeleteAccessKeys(ctx context.Context, keys []string)
 	return m.mockDeleteAccessKeys(ctx, keys)
 }
 
+// ConfigurationService Mock
+type MockConfigurationService struct {
+	mockGetEnvOriginal func(ctx context.Context, env string) (string, bool, error)
+	mockIsEnvOriginal  func(ctx context.Context, env string) bool
+}
+
+func (m *MockConfigurationService) GetEnvOriginal(ctx context.Context, env string) (string, bool, error) {
+	return m.mockGetEnvOriginal(ctx, env)
+}
+
+func (m *MockConfigurationService) IsEnvOriginal(ctx context.Context, env string) bool {
+	return m.mockIsEnvOriginal(ctx, env)
+}
+
 func TestAuthMiddlewareTestSuite(t *testing.T) {
 	suite.Run(t, new(AuthMiddlewareTestSuite))
 }
@@ -59,8 +75,9 @@ func TestAuthMiddlewareTestSuite(t *testing.T) {
 func (suite *AuthMiddlewareTestSuite) SetupTest() {
 	suite.templates = &MockTemplates{}
 	suite.access = &MockAccessService{}
+	suite.configuration = &MockConfigurationService{}
 	suite.perms = permissions.New()
-	suite.authMiddle = auth.NewAuthMiddleware(suite.access, suite.perms, suite.templates)
+	suite.authMiddle = auth.NewAuthMiddleware(suite.access, suite.configuration, suite.perms, suite.templates)
 }
 
 func (suite *AuthMiddlewareTestSuite) TestAuthMiddleware() {
@@ -71,12 +88,15 @@ func (suite *AuthMiddlewareTestSuite) TestAuthMiddleware() {
 		prepareMock        func()
 		expectedStatus     int
 	}{
-		// admin access key
+		// admin
 		{
-			name:               "Access granted with admin key and required ReadConfig",
+			name:               "Access granted for original environment with admin key and required ReadConfig",
 			accessKey:          "admin-key",
 			requiredPermission: permissions.ReadConfig,
 			prepareMock: func() {
+				suite.configuration.mockIsEnvOriginal = func(ctx context.Context, env string) bool {
+					return true
+				}
 				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
 					perms := suite.perms.NewAccessKeyPermissions()
 					perms.SetAdmin()
@@ -86,10 +106,13 @@ func (suite *AuthMiddlewareTestSuite) TestAuthMiddleware() {
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:               "Access granted with admin key and required clone-env",
+			name:               "Access granted for original environment with admin key and required clone-env",
 			accessKey:          "admin-key",
 			requiredPermission: permissions.CloneEnvironment,
 			prepareMock: func() {
+				suite.configuration.mockIsEnvOriginal = func(ctx context.Context, env string) bool {
+					return true
+				}
 				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
 					perms := suite.perms.NewAccessKeyPermissions()
 					perms.SetAdmin()
@@ -99,10 +122,13 @@ func (suite *AuthMiddlewareTestSuite) TestAuthMiddleware() {
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:               "Access granted with admin key and required dashboard access",
+			name:               "Access granted for original environment with admin key and required dashboard access",
 			accessKey:          "admin-key",
 			requiredPermission: permissions.AccessDashboard,
 			prepareMock: func() {
+				suite.configuration.mockIsEnvOriginal = func(ctx context.Context, env string) bool {
+					return true
+				}
 				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
 					perms := suite.perms.NewAccessKeyPermissions()
 					perms.SetAdmin()
@@ -113,10 +139,13 @@ func (suite *AuthMiddlewareTestSuite) TestAuthMiddleware() {
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:               "Access granted with admin key and required multiple permissions",
+			name:               "Access granted for original environment with admin key and required multiple permissions",
 			accessKey:          "admin-key",
 			requiredPermission: permissions.AccessDashboard | permissions.ReadConfig | permissions.RevealSecrets | permissions.CloneEnvironment,
 			prepareMock: func() {
+				suite.configuration.mockIsEnvOriginal = func(ctx context.Context, env string) bool {
+					return true
+				}
 				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
 					perms := suite.perms.NewAccessKeyPermissions()
 					perms.SetAdmin()
@@ -125,12 +154,15 @@ func (suite *AuthMiddlewareTestSuite) TestAuthMiddleware() {
 			},
 			expectedStatus: http.StatusOK,
 		},
-		// Insufficient permissions
+		// User with Insufficient permissions
 		{
-			name:               "Access denied with Insufficient permissions key for cloning env for env",
+			name:               "Access denied for original environment with key with Insufficient permissions for cloning an environment",
 			accessKey:          "user-key",
 			requiredPermission: permissions.CloneEnvironment,
 			prepareMock: func() {
+				suite.configuration.mockIsEnvOriginal = func(ctx context.Context, env string) bool {
+					return true
+				}
 				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
 					perms := suite.perms.NewAccessKeyPermissions()
 					perms.Grant("default", permissions.ReadConfig) // Only read permission
@@ -141,10 +173,13 @@ func (suite *AuthMiddlewareTestSuite) TestAuthMiddleware() {
 			expectedStatus: http.StatusForbidden,
 		},
 		{
-			name:               "Access denied with Insufficient permissions key for reading config for env",
+			name:               "Access denied for original environment with Insufficient permissions key for reading config for env",
 			accessKey:          "user-key",
 			requiredPermission: permissions.ReadConfig,
 			prepareMock: func() {
+				suite.configuration.mockIsEnvOriginal = func(ctx context.Context, env string) bool {
+					return true
+				}
 				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
 					perms := suite.perms.NewAccessKeyPermissions()
 					perms.Grant("default", permissions.CloneEnvironment) // Only read permission
@@ -155,10 +190,13 @@ func (suite *AuthMiddlewareTestSuite) TestAuthMiddleware() {
 			expectedStatus: http.StatusForbidden,
 		},
 		{
-			name:               "Access denied with Insufficient permissions key for accessing dashboard",
+			name:               "Access denied for original environment with Insufficient permissions key for accessing dashboard",
 			accessKey:          "access-key",
 			requiredPermission: permissions.AccessDashboard,
 			prepareMock: func() {
+				suite.configuration.mockIsEnvOriginal = func(ctx context.Context, env string) bool {
+					return true
+				}
 				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
 					perms := suite.perms.NewAccessKeyPermissions()
 					perms.Grant("default", permissions.CloneEnvironment)
@@ -169,9 +207,12 @@ func (suite *AuthMiddlewareTestSuite) TestAuthMiddleware() {
 			expectedStatus: http.StatusForbidden,
 		},
 		{
-			name:      "Access denied with Insufficient permissions key for accessing dashboard",
+			name:      "Access denied for original environment with Insufficient permissions key for accessing dashboard",
 			accessKey: "access-key",
 			prepareMock: func() {
+				suite.configuration.mockIsEnvOriginal = func(ctx context.Context, env string) bool {
+					return true
+				}
 				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
 					perms := suite.perms.NewAccessKeyPermissions()
 					perms.Grant("default", permissions.CloneEnvironment)
@@ -180,6 +221,200 @@ func (suite *AuthMiddlewareTestSuite) TestAuthMiddleware() {
 				}
 			},
 			expectedStatus: http.StatusForbidden,
+		},
+		// admin with cloned environment
+		{
+			name:               "Access granted for cloned environment with admin key and required ReadConfig",
+			accessKey:          "admin-key",
+			requiredPermission: permissions.ReadConfig,
+			prepareMock: func() {
+				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
+					perms := suite.perms.NewAccessKeyPermissions()
+					perms.SetAdmin()
+					return perms, true, nil
+				}
+				suite.configuration.mockIsEnvOriginal = func(ctx context.Context, env string) bool {
+					return false
+				}
+				suite.configuration.mockGetEnvOriginal = func(ctx context.Context, env string) (string, bool, error) {
+					return "cloned", true, nil
+				}
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:               "Access granted for cloned environment with admin key and required clone-env",
+			accessKey:          "admin-key",
+			requiredPermission: permissions.CloneEnvironment,
+			prepareMock: func() {
+				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
+					perms := suite.perms.NewAccessKeyPermissions()
+					perms.SetAdmin()
+					return perms, true, nil
+				}
+				suite.configuration.mockIsEnvOriginal = func(ctx context.Context, env string) bool {
+					return false
+				}
+				suite.configuration.mockGetEnvOriginal = func(ctx context.Context, env string) (string, bool, error) {
+					return "cloned", true, nil
+				}
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:               "Access granted for original environment with admin key and required dashboard access",
+			accessKey:          "admin-key",
+			requiredPermission: permissions.AccessDashboard,
+			prepareMock: func() {
+				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
+					perms := suite.perms.NewAccessKeyPermissions()
+					perms.SetAdmin()
+					return perms, true, nil
+				}
+				suite.configuration.mockIsEnvOriginal = func(ctx context.Context, env string) bool {
+					return false
+				}
+				suite.configuration.mockGetEnvOriginal = func(ctx context.Context, env string) (string, bool, error) {
+					return "cloned", true, nil
+				}
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:               "Access granted for original environment with admin key and required multiple permissions",
+			accessKey:          "admin-key",
+			requiredPermission: permissions.AccessDashboard | permissions.ReadConfig | permissions.RevealSecrets | permissions.CloneEnvironment,
+			prepareMock: func() {
+				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
+					perms := suite.perms.NewAccessKeyPermissions()
+					perms.SetAdmin()
+					return perms, true, nil
+				}
+				suite.configuration.mockIsEnvOriginal = func(ctx context.Context, env string) bool {
+					return false
+				}
+				suite.configuration.mockGetEnvOriginal = func(ctx context.Context, env string) (string, bool, error) {
+					return "cloned", true, nil
+				}
+			},
+			expectedStatus: http.StatusOK,
+		},
+		// User with Insufficient permissions
+		{
+			name:               "Access denied when access keys does not exist",
+			accessKey:          "access-key",
+			requiredPermission: permissions.ReadConfig,
+			prepareMock: func() {
+				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
+					return nil, false, nil
+				}
+			},
+			expectedStatus: http.StatusForbidden,
+		},
+		{
+			name:               "Access denied for cloned environment with key with Insufficient permissions for cloning an environment",
+			accessKey:          "user-key",
+			requiredPermission: permissions.CloneEnvironment,
+			prepareMock: func() {
+				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
+					perms := suite.perms.NewAccessKeyPermissions()
+					perms.Grant("default", permissions.ReadConfig) // Only read permission
+					return perms, true, nil
+				}
+				suite.configuration.mockIsEnvOriginal = func(ctx context.Context, env string) bool {
+					return false
+				}
+				suite.configuration.mockGetEnvOriginal = func(ctx context.Context, env string) (string, bool, error) {
+					return "cloned", true, nil
+				}
+			},
+			expectedStatus: http.StatusForbidden,
+		},
+		{
+			name:               "Access denied for cloned environment with Insufficient permissions key for reading config for env",
+			accessKey:          "user-key",
+			requiredPermission: permissions.ReadConfig,
+			prepareMock: func() {
+				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
+					perms := suite.perms.NewAccessKeyPermissions()
+					perms.Grant("default", permissions.CloneEnvironment) // Only read permission
+					return perms, true, nil
+				}
+				suite.configuration.mockIsEnvOriginal = func(ctx context.Context, env string) bool {
+					return false
+				}
+				suite.configuration.mockGetEnvOriginal = func(ctx context.Context, env string) (string, bool, error) {
+					return "cloned", true, nil
+				}
+			},
+			expectedStatus: http.StatusForbidden,
+		},
+		{
+			name:               "Access denied for cloned environment with Insufficient permissions key for accessing dashboard",
+			accessKey:          "access-key",
+			requiredPermission: permissions.AccessDashboard,
+			prepareMock: func() {
+				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
+					perms := suite.perms.NewAccessKeyPermissions()
+					perms.Grant("default", permissions.CloneEnvironment)
+					return perms, true, nil
+				}
+				suite.configuration.mockIsEnvOriginal = func(ctx context.Context, env string) bool {
+					return false
+				}
+				suite.configuration.mockGetEnvOriginal = func(ctx context.Context, env string) (string, bool, error) {
+					return "cloned", true, nil
+				}
+			},
+			expectedStatus: http.StatusForbidden,
+		},
+		{
+			name:      "Access denied for cloned environment with Insufficient permissions key for accessing dashboard",
+			accessKey: "access-key",
+			prepareMock: func() {
+				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
+					perms := suite.perms.NewAccessKeyPermissions()
+					perms.Grant("default", permissions.CloneEnvironment)
+					return perms, true, nil
+				}
+				suite.configuration.mockIsEnvOriginal = func(ctx context.Context, env string) bool {
+					return false
+				}
+				suite.configuration.mockGetEnvOriginal = func(ctx context.Context, env string) (string, bool, error) {
+					return "cloned", true, nil
+				}
+			},
+			expectedStatus: http.StatusForbidden,
+		},
+		// Error handling
+		{
+			name:      "Error returned on getting cloned environment original",
+			accessKey: "access-key",
+			prepareMock: func() {
+				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
+					return nil, false, errors.New("error")
+				}
+
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
+		{
+			name:      "Error returned on getting access key permissions",
+			accessKey: "access-key",
+			prepareMock: func() {
+				suite.access.mockGetAccessKeyPermissions = func(ctx context.Context, accessKey string) (*permissions.AccessKeyPermissions, bool, error) {
+					perms := suite.perms.NewAccessKeyPermissions()
+					perms.SetAdmin()
+					return perms, true, nil
+				}
+				suite.configuration.mockIsEnvOriginal = func(ctx context.Context, env string) bool {
+					return false
+				}
+				suite.configuration.mockGetEnvOriginal = func(ctx context.Context, env string) (string, bool, error) {
+					return "", false, errors.New("error")
+				}
+			},
+			expectedStatus: http.StatusInternalServerError,
 		},
 	}
 

@@ -10,6 +10,7 @@ import (
 
 	"github.com/raw-leak/configleam/internal/app/configuration/analyzer"
 	"github.com/raw-leak/configleam/internal/app/configuration/gitmanager"
+	"github.com/raw-leak/configleam/internal/app/configuration/repository"
 	"github.com/raw-leak/configleam/internal/app/configuration/types"
 	"github.com/raw-leak/configleam/internal/pkg/auth"
 	"github.com/raw-leak/configleam/internal/pkg/permissions"
@@ -36,23 +37,15 @@ type Analyzer interface {
 	AnalyzeTagsForUpdates(envs map[string]gitmanager.Env, tags []string) ([]analyzer.EnvUpdate, bool, error)
 }
 
-type Repository interface {
-	CloneConfig(ctx context.Context, env, newEnv string, updateGlobals map[string]interface{}) error
-	ReadConfig(ctx context.Context, env string, groups, globalKeys []string) (map[string]interface{}, error)
-	UpsertConfig(ctx context.Context, env string, gitRepoName string, config *types.ParsedRepoConfig) error
-	DeleteConfig(ctx context.Context, env string, gitRepoName string) error
-	HealthCheck(ctx context.Context) error
-}
-
 type ConfigurationService struct {
-	gitrepos []*gitmanager.GitRepository
-	envs     []string
+	gitrepo *gitmanager.GitRepository
+	envs    map[string]bool
 
 	mux          sync.RWMutex
 	pollInterval time.Duration
 	ticker       *time.Ticker
 
-	repository Repository
+	repository repository.Repository
 	extractor  Extractor
 	parser     Parser
 	analyzer   Analyzer
@@ -60,31 +53,30 @@ type ConfigurationService struct {
 }
 
 type ConfigurationConfig struct {
-	Repos        []string
+	RepoUrl      string
 	Envs         []string
 	Branch       string
 	PullInterval time.Duration
 }
 
-// TODO: test
-func New(cfg ConfigurationConfig, parser Parser, extractor Extractor, repository Repository, analyzer Analyzer, secrets Secrets) *ConfigurationService {
-	gitrepos := []*gitmanager.GitRepository{}
-
-	for _, url := range cfg.Repos {
-		repo, err := gitmanager.NewGitRepository(url, cfg.Branch, cfg.Envs)
-		if err != nil {
-			log.Fatalf("Fatal generating '%s' local git-repository", url)
-		}
-		gitrepos = append(gitrepos, repo)
+func New(cfg ConfigurationConfig, parser Parser, extractor Extractor, repository repository.Repository, analyzer Analyzer, secrets Secrets) *ConfigurationService {
+	gitrepo, err := gitmanager.NewGitRepository(cfg.RepoUrl, cfg.Branch, cfg.Envs)
+	if err != nil {
+		log.Fatalf("Fatal generating '%s' local git-repository", cfg.RepoUrl)
 	}
 
 	if cfg.PullInterval == 0 {
 		cfg.PullInterval = PullIntervalDefault
 	}
 
+	envs := map[string]bool{}
+	for _, env := range cfg.Envs {
+		envs[env] = true
+	}
+
 	return &ConfigurationService{
-		gitrepos:     gitrepos,
-		envs:         cfg.Envs,
+		gitrepo:      gitrepo,
+		envs:         envs,
 		pollInterval: cfg.PullInterval,
 		mux:          sync.RWMutex{},
 		repository:   repository,
@@ -101,7 +93,7 @@ func (s *ConfigurationService) Run(ctx context.Context) {
 		log.Fatalf(err.Error())
 	}
 
-	err = s.buildConfigFromLocalRepos(ctx)
+	err = s.buildConfigFromLocalFirstTime(ctx)
 	if err != nil {
 		log.Fatalf(err.Error())
 	}
@@ -133,23 +125,40 @@ func (s *ConfigurationService) ReadConfig(ctx context.Context, env string, group
 }
 
 func (s *ConfigurationService) cloneAllRemoteRepos(_ context.Context) error {
-	for _, gitrepo := range s.gitrepos {
-		err := gitrepo.CloneRemoteRepo()
-		if err != nil {
-			return err
-		}
+	err := s.gitrepo.CloneRemoteRepo()
+	if err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func (s *ConfigurationService) buildConfigFromLocalRepos(ctx context.Context) error {
-	for _, gitrepo := range s.gitrepos {
-		err := s.buildConfigFromLocalRepo(ctx, gitrepo)
+func (s *ConfigurationService) buildConfigFromLocalFirstTime(ctx context.Context) error {
+	err := s.buildConfigFromLocalRepo(ctx)
+	if err != nil {
+		log.Printf("Error while building the config from a local repo: %e\n", err)
+		return err
+	}
+
+	addedEnvs := []string{}
+	for _, env := range s.gitrepo.Envs {
+		envParams := repository.EnvParams{
+			Name:    env.Name,
+			Version: env.LastTag,
+			Clone:   false,
+		}
+		err = s.repository.AddEnv(ctx, env.Name, envParams)
 		if err != nil {
-			log.Printf("Error while building the config from a local repo: %e\n", err)
+			log.Printf("Error while adding environment '%s' to the repository: %e\n", s.gitrepo.Name, err)
+			for _, addedEnv := range addedEnvs {
+				delErr := s.repository.DeleteEnv(ctx, addedEnv)
+				if delErr != nil {
+					log.Printf("Error while deleting environment '%s' after failed adding environment: %e\n", addedEnv, err)
+				}
+			}
 			return err
 		}
+		addedEnvs = append(addedEnvs, env.Name)
 	}
 
 	return nil
@@ -159,43 +168,40 @@ func (s *ConfigurationService) watchRemoteReposForUpdates() {
 	s.ticker = time.NewTicker(s.pollInterval)
 
 	for range s.ticker.C {
-		for _, gitrepo := range s.gitrepos {
-			err := s.buildConfigFromLocalRepo(context.Background(), gitrepo)
-			if err != nil {
-				log.Printf("Error on watching while building the config from a local repo: %e\n", err)
-
-			}
+		err := s.buildConfigFromLocalRepo(context.Background())
+		if err != nil {
+			log.Printf("Error on watching while building the config from a local repo: %e\n", err)
 		}
 	}
 }
 
-func (s *ConfigurationService) buildConfigFromLocalRepo(ctx context.Context, gitrepo *gitmanager.GitRepository) error {
-	tags, err := gitrepo.PullTagsFromRemoteRepo()
+func (s *ConfigurationService) buildConfigFromLocalRepo(ctx context.Context) error {
+	tags, err := s.gitrepo.PullTagsFromRemoteRepo()
 	if err != nil {
 		log.Println("Error pulling tags:", err)
 		return err
 	}
 
-	updatedEnvs, ok, err := s.analyzer.AnalyzeTagsForUpdates(gitrepo.Envs, tags)
+	updatedEnvs, ok, err := s.analyzer.AnalyzeTagsForUpdates(s.gitrepo.Envs, tags)
 	if err != nil {
 		log.Println("Error analyzing tags:", err)
 		return err
 
 	}
 	if !ok {
-		log.Printf("There are no changes for repo [%s]", gitrepo.URL)
+		log.Printf("There are no changes for repo [%s]", s.gitrepo.URL)
 		return nil
 	}
 
 	for _, env := range updatedEnvs {
 		log.Printf("New changes detected, applying updates for [%s] with the new tag [%s]", env.Name, env.Tag)
 
-		gitrepo.FetchAndCheckout(env.Tag)
+		s.gitrepo.FetchAndCheckout(env.Tag)
 
 		// need to lock the repo from change while extracting the config-list
-		gitrepo.Mux.Lock()
-		configList, err := s.extractor.ExtractConfigList(gitrepo.Dir + "/" + env.Name)
-		gitrepo.Mux.Unlock()
+		s.gitrepo.Mux.Lock()
+		configList, err := s.extractor.ExtractConfigList(s.gitrepo.Dir + "/" + env.Name)
+		s.gitrepo.Mux.Unlock()
 
 		if err != nil {
 			log.Println("Error extracting configuration:", err)
@@ -209,13 +215,13 @@ func (s *ConfigurationService) buildConfigFromLocalRepo(ctx context.Context, git
 		}
 
 		log.Printf("Upserting new repo config for environment '%s'", env.Name)
-		err = s.repository.UpsertConfig(ctx, env.Name, gitrepo.Name, repoConfig)
+		err = s.repository.UpsertConfig(ctx, env.Name, s.gitrepo.Name, repoConfig)
 		if err != nil {
 			log.Printf("Error upserting config for environment '%s' with error %v:", env.Name, err)
 			return err
 		}
 
-		gitrepo.SetEnvLatestVersion(ctx, env.Name, env.Tag, env.SemVer)
+		s.gitrepo.SetEnvLatestVersion(ctx, env.Name, env.Tag, env.SemVer)
 	}
 
 	return nil
@@ -224,12 +230,12 @@ func (s *ConfigurationService) buildConfigFromLocalRepo(ctx context.Context, git
 func (s *ConfigurationService) cleanLocalRepos() {
 	log.Println("Cleaning local repositories...")
 
-	for _, gitrepo := range s.gitrepos {
-		err := gitrepo.RemoveLocalRepo()
-		if err != nil {
-			log.Printf("Error on removing local repo %s from dir %s", gitrepo.URL, gitrepo.Dir)
-		}
+	err := s.gitrepo.RemoveLocalRepo()
+	if err != nil {
+		log.Printf("Error on removing local repo %s from dir %s", s.gitrepo.URL, s.gitrepo.Dir)
 	}
+
+	// TODO: do we need to clear the repo environments once down?
 }
 
 func (s *ConfigurationService) Shutdown() {
@@ -241,13 +247,25 @@ func (s *ConfigurationService) Shutdown() {
 }
 
 func (s *ConfigurationService) DeleteConfig(ctx context.Context, deleteEnv string) error {
-	for _, reservedEnv := range s.envs {
+	for reservedEnv := range s.envs {
 		if reservedEnv == deleteEnv {
 			return fmt.Errorf("env '%s' reserved and can not be deleted", deleteEnv)
 		}
 	}
 
-	return s.repository.DeleteConfig(ctx, deleteEnv, "*")
+	err := s.repository.DeleteConfig(ctx, deleteEnv, "*")
+	if err != nil {
+		log.Printf("Error deleting config environment '%s' with error %v:", deleteEnv, err)
+		return err
+	}
+
+	err = s.repository.DeleteEnv(ctx, deleteEnv)
+	if err != nil {
+		log.Printf("Error deleting environment '%s' with error %v:", deleteEnv, err)
+		return err
+	}
+
+	return nil
 }
 
 func (s *ConfigurationService) HealthCheck(ctx context.Context) error {
@@ -255,18 +273,11 @@ func (s *ConfigurationService) HealthCheck(ctx context.Context) error {
 }
 
 func (s *ConfigurationService) CloneConfig(ctx context.Context, cloneEnv, newEnv string, updateGlobals map[string]interface{}) error {
-	var gitrepo *gitmanager.GitRepository
 	found := false
 
-	for _, gr := range s.gitrepos {
-		for _, repoEnv := range gr.Envs {
-			if repoEnv.Name == cloneEnv {
-				gitrepo = gr
-				found = true
-				break
-			}
-		}
-		if found {
+	for env := range s.envs {
+		if env == cloneEnv {
+			found = true
 			break
 		}
 	}
@@ -275,8 +286,8 @@ func (s *ConfigurationService) CloneConfig(ctx context.Context, cloneEnv, newEnv
 		return fmt.Errorf("env %s for cloning has not been found", cloneEnv)
 	}
 
-	gitrepo.Mux.Lock()
-	defer gitrepo.Mux.Unlock()
+	s.gitrepo.Mux.Lock()
+	defer s.gitrepo.Mux.Unlock()
 
 	if err := s.repository.CloneConfig(ctx, cloneEnv, newEnv, updateGlobals); err != nil {
 		return err
@@ -285,7 +296,22 @@ func (s *ConfigurationService) CloneConfig(ctx context.Context, cloneEnv, newEnv
 	if err := s.secrets.CloneSecrets(ctx, cloneEnv, newEnv); err != nil {
 		log.Printf("Error cloning secrets for %s to %s: %v", cloneEnv, newEnv, err)
 		if delErr := s.repository.DeleteConfig(ctx, newEnv, "*"); delErr != nil {
-			log.Printf("Error cleaning up config for %s after failed secrets clone: %v", newEnv, delErr)
+			log.Printf("Error cleaning up config for '%s' after failed secrets clone: %v", newEnv, delErr)
+		}
+		return err
+	}
+
+	newEnvParams := repository.EnvParams{
+		Name:     s.gitrepo.Name,
+		Version:  s.gitrepo.LastTag,
+		Clone:    true,
+		Original: cloneEnv,
+	}
+	err := s.repository.AddEnv(ctx, newEnv, newEnvParams)
+	if err != nil {
+		log.Printf("Error adding clone '%s' of environment '%s': %v", cloneEnv, newEnv, err)
+		if delErr := s.repository.DeleteConfig(ctx, newEnv, "*"); delErr != nil {
+			log.Printf("Error cleaning up config for %s after failed adding clone: %v", newEnv, delErr)
 		}
 		return err
 	}
@@ -293,6 +319,16 @@ func (s *ConfigurationService) CloneConfig(ctx context.Context, cloneEnv, newEnv
 	return nil
 }
 
-func (s *ConfigurationService) GetEnvs(_ context.Context) []string {
-	return s.envs
+func (s *ConfigurationService) GetEnvs(ctx context.Context) []string {
+	// params, err := s.repository.GetAllEnvs(ctx)
+	return []string{}
+}
+
+func (s *ConfigurationService) IsEnvOriginal(ctx context.Context, env string) bool {
+	_, ok := s.envs[env]
+	return ok
+}
+
+func (s *ConfigurationService) GetEnvOriginal(ctx context.Context, env string) (string, bool, error) {
+	return s.repository.GetEnvOriginal(ctx, env)
 }

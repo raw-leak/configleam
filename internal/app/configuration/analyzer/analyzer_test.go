@@ -188,7 +188,6 @@ func TestAnalyzeTagsForUpdates(t *testing.T) {
 		},
 		{
 			"Include Invalid Tags and Ensure They Are Skipped",
-
 			map[string]gitmanager.Env{
 				"develop": {LastTag: "v1.0.5-develop", SemVer: helper.SemanticVersion{Major: 1, Minor: 0, Patch: 5}},
 				"staging": {LastTag: "v2.1.5-staging", SemVer: helper.SemanticVersion{Major: 2, Minor: 1, Patch: 5}},
@@ -218,7 +217,7 @@ func TestAnalyzeTagsForUpdates(t *testing.T) {
 
 			assert.Equal(t, tc.expectedErr, err, "Error should match")
 			assert.Equal(t, tc.expectedHasUpdates, hasUpdates, "Expected has updates to match (Ok-idiom )")
-			assert.Equal(t, tc.expectedUpdates, updates, "Expected updates to match")
+			assert.ElementsMatch(t, tc.expectedUpdates, updates, "Expected updates to match")
 
 		})
 	}
