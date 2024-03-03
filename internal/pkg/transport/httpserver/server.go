@@ -44,9 +44,7 @@ func (s *httpServer) ListenAndServe(httpAddr string) error {
 	mux.HandleFunc("/ready", endpoints.ReadinessCheckHandler)
 
 	// middlewares
-	auth := auth.NewAuthMiddleware(s.access, s.permissions, templates.New())
-
-	// TODO migrate handlers pattern to go 1.22, by including the HTTP method
+	auth := auth.NewAuthMiddleware(s.access, s.configuration, s.permissions, templates.New())
 
 	// configuration business handlers
 	mux.HandleFunc("GET /config", auth.Guard(p.ReadConfig)(s.configuration.ReadConfigHandler))

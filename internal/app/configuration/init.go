@@ -36,9 +36,9 @@ func Init(ctx context.Context, cfg *config.Config, secrets service.Secrets) (*Co
 	analyzer := analyzer.New()
 
 	service := service.New(service.ConfigurationConfig{
-		Branch:       cfg.RepoConfig.Branch,
-		Envs:         cfg.RepoConfig.Environments,
-		Repos:        cfg.RepoConfig.Repositories,
+		Branch:       cfg.RepoBranch,
+		RepoUrl:      cfg.RepoUrl,
+		Envs:         cfg.RepoEnvs,
 		PullInterval: cfg.PullInterval,
 	}, parser, extractor, repo, analyzer, secrets)
 

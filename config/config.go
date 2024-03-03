@@ -1,10 +1,7 @@
 package config
 
 import (
-	"encoding/json"
-	"fmt"
 	"log"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -36,6 +33,12 @@ type Config struct {
 	EtcdUsername string `envconfig:"ETCD_USERNAME"`
 	EtcdPassword string `envconfig:"ETCD_PASSWORD"`
 
+	// cfg repo
+	RepoUrl    string   `envconfig:"GIT_REPOSITORY_URL"`
+	RepoEnvs   []string `envconfig:"GIT_REPOSITORY_ENVS" delim:","`
+	RepoBranch string   `envconfig:"GIT_REPOSITORY_BRANCH" default:"main"`
+
+	// k8s
 	LeaseLockName      string        `envconfig:"K8S_LEASE_LOCK_NAME" default:"configleam-lock"`
 	LeaseLockNamespace string        `envconfig:"K8S_LEASE_LOCK_NAMESPACE" default:"default"`
 	LeaseDuration      time.Duration `envconfig:"K8S_LEASE_DURATION"`
@@ -43,14 +46,6 @@ type Config struct {
 	RetryPeriod        time.Duration `envconfig:"K8S_RETRY_PERIOD"`
 
 	EnableLeaderElection Bool `envconfig:"K8S_ENABLE_LEADER_ELECTION"`
-
-	RepoConfig RepoConfig
-}
-
-type RepoConfig struct {
-	Repositories []string `json:"repositories"`
-	Environments []string `json:"environments"`
-	Branch       string   `json:"branch" default:"main"`
 }
 
 var (
@@ -71,35 +66,7 @@ func Get() (*Config, error) {
 		if err != nil {
 			log.Fatalf("Error processing config: %v", err)
 		}
-
-		if err := loadConfigFile("config.json", &config.RepoConfig); err != nil {
-			log.Fatalf("Error loading config.json: %v", err)
-		}
 	})
 
-	if len(config.RepoConfig.Repositories) < 1 {
-		return nil, fmt.Errorf("there are no repositories provided")
-	}
-
-	if len(config.RepoConfig.Environments) < 1 {
-		return nil, fmt.Errorf("there are no environments provided")
-	}
-
 	return &config, nil
-}
-
-// loadConfigFile reads and parses a JSON configuration file.
-func loadConfigFile(filename string, cfg interface{}) error {
-	file, err := os.Open(filename)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	decoder := json.NewDecoder(file)
-	if err := decoder.Decode(cfg); err != nil {
-		return err
-	}
-
-	return nil
 }

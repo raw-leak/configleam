@@ -15,8 +15,6 @@ import (
 )
 
 const (
-	ConfigurationPrefix = "configleam:config"
-
 	GlobalPrefix = "global"
 	GroupPrefix  = "group"
 
@@ -338,7 +336,6 @@ func (r *RedisRepository) CloneConfig(ctx context.Context, cloneEnv, newEnv stri
 	return nil
 }
 
-// TODO: test
 func (r *RedisRepository) HealthCheck(ctx context.Context) error {
 	_, err := r.Client.Ping(ctx).Result()
 	if err != nil {
@@ -348,30 +345,121 @@ func (r *RedisRepository) HealthCheck(ctx context.Context) error {
 	return nil
 }
 
-func (r *RedisRepository) GetBaseKey(gitRepoName string, envName string) string {
-	return fmt.Sprintf("%s:%s:%s", ConfigurationPrefix, gitRepoName, envName)
+// EnvParams represents parameters for managing environment metadata.
+type EnvParams struct {
+	Name     string
+	Version  string
+	Clone    bool
+	Original string
 }
 
-func (r *RedisRepository) GetGlobalKeyKey(baseKeyPrefix string, GlobalPrefix string, configKey string) string {
-	return fmt.Sprintf("%s:%s:%s", baseKeyPrefix, GlobalPrefix, configKey)
+// AddEnv adds metadata for a new environment to the repository.
+func (r *RedisRepository) AddEnv(ctx context.Context, envName string, params EnvParams) error {
+	if len(envName) < 1 {
+		return errors.New("environment name cannot be empty")
+	}
+
+	fields := make(map[string]interface{})
+	fields["name"] = params.Name
+	fields["version"] = params.Version
+	fields["clone"] = params.Clone
+	fields["original"] = params.Original
+
+	_, err := r.Client.HMSet(ctx, r.GetEnvKey(envName), fields).Result()
+	if err != nil {
+		return fmt.Errorf("failed to add environment metadata: %w", err)
+	}
+	return nil
 }
 
-func (r *RedisRepository) GetGroupKey(baseKeyPrefix string, groupName string) string {
-	return fmt.Sprintf("%s:%s", baseKeyPrefix, groupName)
+// DeleteEnv removes metadata for the specified environment from the repository.
+func (r *RedisRepository) DeleteEnv(ctx context.Context, envName string) error {
+	if len(envName) < 1 {
+		return errors.New("environment name cannot be empty")
+	}
+
+	err := r.Client.HGetAll(ctx, r.GetEnvKey(envName)).Err()
+	if err == redis.Nil {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to remove environment metadata: %w", err)
+	}
+	return nil
 }
 
-func (r *RedisRepository) GetGroupPatternKey(env string, groupName string) string {
-	return fmt.Sprintf("%s:*:%s:%s:%s", ConfigurationPrefix, env, GroupPrefix, groupName)
+// GetEnvOriginal retrieves the original value of the specified environment from the repository.
+func (r *RedisRepository) GetEnvOriginal(ctx context.Context, envName string) (string, bool, error) {
+	if len(envName) < 1 {
+		return "", false, errors.New("environment name cannot be empty")
+	}
+
+	original, err := r.Client.HGet(ctx, r.GetEnvKey(envName), "original").Result()
+	if err == redis.Nil {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("failed to get original environment value: %w", err)
+	}
+	return original, true, nil
 }
 
-func (r *RedisRepository) GetGlobalPatternKey(env string, key string) string {
-	return fmt.Sprintf("%s:*:%s:%s:%s", ConfigurationPrefix, env, GlobalPrefix, key)
+// SetEnvVersion sets the version metadata for the specified environment in the repository.
+func (r *RedisRepository) SetEnvVersion(ctx context.Context, envName string, version string) error {
+	if len(envName) < 1 {
+		return errors.New("environment name cannot be empty")
+	}
+
+	err := r.Client.HSet(ctx, r.GetEnvKey(envName), "version", version).Err()
+	if err != nil {
+		return fmt.Errorf("failed to set environment version: %w", err)
+	}
+	return nil
 }
 
-func (r *RedisRepository) GetCloneEnvPatternKey(cloneEnv string) string {
-	return fmt.Sprintf("%s:*:%s:*", ConfigurationPrefix, cloneEnv)
+// GetAllEnvs retrieves all available environments from the repository.
+func (r *RedisRepository) GetAllEnvs(ctx context.Context) ([]EnvParams, error) {
+	keys, err := r.Client.Keys(ctx, r.GetAllEnvsPatternKey()).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all environments keys: %w", err)
+	}
+
+	environments := make([]EnvParams, 0, len(keys))
+	for _, key := range keys {
+		envName := r.extractEnvName(key)
+		envParams, err := r.GetEnvParams(ctx, envName)
+		if err != nil {
+			return nil, err
+		}
+		environments = append(environments, envParams)
+	}
+
+	return environments, nil
 }
 
-func (r *RedisRepository) GetCloneEnvDeletePatternKey(gitRepoName, clonedEnv string) string {
-	return fmt.Sprintf("%s:*:%s:%s:*", ConfigurationPrefix, gitRepoName, clonedEnv)
+// GetEnvParams retrieves the environment metadata for the specified key.
+func (r *RedisRepository) GetEnvParams(ctx context.Context, envName string) (EnvParams, error) {
+	if len(envName) < 1 {
+		return EnvParams{}, errors.New("environment name cannot be empty")
+	}
+
+	values, err := r.Client.HGetAll(ctx, r.GetEnvKey(envName)).Result()
+	if err != nil {
+		return EnvParams{}, fmt.Errorf("failed to get environment metadata: %w", err)
+	}
+	if len(values) < 1 {
+		return EnvParams{}, EnvNotFoundError{Key: envName}
+	}
+
+	return EnvParams{
+		Name:     envName,
+		Version:  values["version"],
+		Clone:    values["clone"] == "1",
+		Original: values["original"],
+	}, nil
+}
+
+// extractEnvName extracts the environment name from the key.
+func (r *RedisRepository) extractEnvName(key string) string {
+	return strings.TrimPrefix(key, r.GetEnvKey(""))
 }
