@@ -21,6 +21,7 @@ func Init(ctx context.Context, cfg *config.Config, encryptor repository.Encrypto
 		RedisAddrs:    cfg.RedisAddrs,
 		RedisUsername: cfg.RedisUsername,
 		RedisPassword: cfg.RedisPassword,
+		RedisTLS:      bool(cfg.RedisTls),
 
 		EtcdAddrs:    cfg.EtcdAddrs,
 		EtcdUsername: cfg.EtcdUsername,
