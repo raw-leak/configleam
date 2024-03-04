@@ -93,11 +93,12 @@ func run() error {
 	httpServer := httpserver.NewHttpServer(configurationSet, secretsSet, accessSet, dashboardSet, perms)
 
 	errChan := make(chan error, 2)
-	go func() {
-		if err := httpServer.ListenAndServe(cfg.Port); err != nil && err != http.ErrServerClosed {
+	go func(tls bool) {
+		if err := httpServer.ListenAndServe(cfg.Port, tls); err != nil && err != http.ErrServerClosed {
+			log.Println(err)
 			errChan <- err
 		}
-	}()
+	}(bool(cfg.Tls))
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
