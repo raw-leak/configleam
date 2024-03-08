@@ -111,20 +111,10 @@ func (s *SecretsService) insertSecretsIntoArray(ctx context.Context, env string,
 
 // UpsertSecrets upserts secrets for environment
 func (s SecretsService) UpsertSecrets(ctx context.Context, env string, cfg map[string]interface{}) error {
-	err := s.repository.HealthCheck(ctx)
-	if err != nil {
-		return err
-	}
-
 	return s.repository.UpsertSecrets(ctx, env, cfg)
 }
 
 // CloneSecrets clones secrets for environment
 func (s SecretsService) CloneSecrets(ctx context.Context, cloneEnv, newEnv string) error {
-	err := s.repository.HealthCheck(ctx)
-	if err != nil {
-		return err
-	}
-
 	return s.repository.CloneSecrets(ctx, cloneEnv, newEnv)
 }

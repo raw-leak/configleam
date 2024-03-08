@@ -5,5 +5,6 @@ build/
 repositories/
 certs/
 .vscode/
+certs/
 
 rest.http

@@ -31,9 +31,9 @@ type Config struct {
 	RedisPassword string `envconfig:"REDIS_PASSWORD"`
 	RedisTls      Bool   `envconfig:"REDIS_TLS"`
 
-	EtcdAddrs    string `envconfig:"ETCD_ADDRS"`
-	EtcdUsername string `envconfig:"ETCD_USERNAME"`
-	EtcdPassword string `envconfig:"ETCD_PASSWORD"`
+	EtcdAddrs    []string `envconfig:"ETCD_ADDRS" delim:","`
+	EtcdUsername string   `envconfig:"ETCD_USERNAME"`
+	EtcdPassword string   `envconfig:"ETCD_PASSWORD"`
 
 	// cfg repo
 	RepoUrl    string   `envconfig:"GIT_REPOSITORY_URL"`

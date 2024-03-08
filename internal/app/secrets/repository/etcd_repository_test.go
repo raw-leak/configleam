@@ -9,48 +9,53 @@ import (
 
 	"github.com/raw-leak/configleam/internal/app/secrets/repository"
 	"github.com/raw-leak/configleam/internal/pkg/encryptor"
-	rds "github.com/raw-leak/configleam/internal/pkg/redis"
-	"github.com/redis/go-redis/v9"
+	"github.com/raw-leak/configleam/internal/pkg/etcd"
 	"github.com/stretchr/testify/suite"
+	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
-type RedisSecretsRepositorySuite struct {
+type EtcdSecretsRepositorySuite struct {
 	suite.Suite
 
-	repository *repository.RedisRepository
-	client     *redis.Client
+	repository *repository.EtcdRepository
+	client     *clientv3.Client
 
 	encryptor *encryptor.Encryptor
 	key       string
 }
 
-func TestRedisSecretsRepositorySuite(t *testing.T) {
-	suite.Run(t, new(RedisSecretsRepositorySuite))
+func TestEtcdSecretsRepositorySuite(t *testing.T) {
+	suite.Run(t, new(EtcdSecretsRepositorySuite))
 }
 
-func (suite *RedisSecretsRepositorySuite) SetupSuite() {
-	var err error
+func (suite *EtcdSecretsRepositorySuite) SetupSuite() {
 
-	suite.client = redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
+	addrs := "http://localhost:8079"
+
+	client, err := clientv3.New(clientv3.Config{
+		Endpoints: []string{addrs},
 	})
+	suite.NoErrorf(err, "error connecting to etcd server %s", addrs)
+
+	suite.client = client
+
 	suite.key = "01234567890123456789012345678901"
 	suite.encryptor, err = encryptor.NewEncryptor(suite.key)
-	suite.Require().NoError(err)
+	suite.NoError(err)
 
-	suite.repository = repository.NewRedisRepository(&rds.Redis{Client: suite.client}, suite.encryptor)
+	suite.repository = repository.NewEtcdRepository(&etcd.Etcd{Client: suite.client}, suite.encryptor)
 }
 
-func (suite *RedisSecretsRepositorySuite) TearDownSuite() {
+func (suite *EtcdSecretsRepositorySuite) TearDownSuite() {
 	suite.client.Close()
 }
 
-func (suite *RedisSecretsRepositorySuite) BeforeTest(testName string) {
-	err := suite.client.FlushAll(context.Background()).Err()
-	suite.Require().NoErrorf(err, "Flushing all data from redis before each test within the test: %s", testName)
+func (suite *EtcdSecretsRepositorySuite) BeforeTest(testName string) {
+	_, err := suite.client.Delete(context.Background(), "", clientv3.WithPrefix())
+	suite.NoErrorf(err, "Deleting all data from ETCD before each test within the test: %s", testName)
 }
 
-func (suite *RedisSecretsRepositorySuite) TestGetSecret() {
+func (suite *EtcdSecretsRepositorySuite) TestGetSecret() {
 	type prePopulateData struct {
 		key   string
 		value interface{}
@@ -178,37 +183,38 @@ func (suite *RedisSecretsRepositorySuite) TestGetSecret() {
 			suite.BeforeTest(tc.name)
 			ctx := context.Background()
 
-			// Pre-populate Redis with test data
 			for _, data := range tc.prePopulate {
 				value, err := json.Marshal(data.value)
-				suite.Require().NoError(err)
+				suite.NoError(err)
 
 				encrypted, err := suite.encryptor.Encrypt(ctx, value)
-				suite.Require().NoError(err)
+				suite.NoError(err)
 
-				err = suite.client.Set(ctx, suite.repository.GetSecretKey(tc.env, data.key), encrypted, 0).Err()
-				suite.Require().NoError(err)
-
+				_, err = suite.client.Put(ctx, suite.repository.GetSecretKey(tc.env, data.key), string(encrypted))
+				suite.NoError(err)
 			}
 
-			keys, err := suite.client.Keys(ctx, "*").Result()
-			suite.Require().NoError(err)
-			suite.Require().Equal(len(keys), len(tc.prePopulate))
+			res, err := suite.client.Get(ctx, repository.SecretPrefix, clientv3.WithPrefix())
+			suite.NoError(err)
+			keys := res.Kvs
+
+			suite.NoError(err)
+			suite.Equal(len(keys), len(tc.prePopulate))
 
 			value, err := suite.repository.GetSecret(ctx, tc.env, tc.fullKey)
 
 			if tc.expectedError != nil {
-				suite.Assert().Equal(tc.expectedError, err)
+				suite.Equal(tc.expectedError, err)
 			} else {
-				suite.Assert().NoError(err)
-				suite.Assert().Equal(tc.expectedValue, value)
+				suite.NoError(err)
+				suite.Equal(tc.expectedValue, value)
 			}
 
 		})
 	}
 }
 
-func (suite *RedisSecretsRepositorySuite) TestUpsertSecrets() {
+func (suite *EtcdSecretsRepositorySuite) TestUpsertSecrets() {
 	type prePopulateData struct {
 		key   string
 		value interface{}
@@ -389,40 +395,39 @@ func (suite *RedisSecretsRepositorySuite) TestUpsertSecrets() {
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
-			// Arrange
+
 			suite.BeforeTest(tc.name)
 			ctx := context.Background()
 
-			// Pre-populate Redis with test data
 			for _, data := range tc.prePopulate {
 				value, err := json.Marshal(data.value)
-				suite.Require().NoError(err)
+				suite.NoError(err)
 
 				encrypted, err := suite.encryptor.Encrypt(ctx, value)
-				suite.Require().NoError(err)
+				suite.NoError(err)
 
-				err = suite.client.Set(ctx, suite.repository.GetSecretKey(tc.inputEnv, data.key), encrypted, 0).Err()
-				suite.Require().NoError(err)
+				_, err = suite.client.Put(ctx, suite.repository.GetSecretKey(tc.inputEnv, data.key), string(encrypted))
+				suite.NoError(err)
 			}
 
-			keys, err := suite.client.Keys(ctx, "*").Result()
-			suite.Require().NoError(err)
-			suite.Require().Equal(len(keys), len(tc.prePopulate))
+			res, err := suite.client.Get(ctx, repository.SecretPrefix, clientv3.WithPrefix())
+			suite.NoError(err)
 
-			// Act
+			keys := res.Kvs
+			suite.Equal(len(keys), len(tc.prePopulate))
+
 			err = suite.repository.UpsertSecrets(ctx, tc.inputEnv, tc.inputValue)
 
-			// Assert
 			if tc.expectedErr != nil {
-				suite.Assert().Equal(tc.expectedErr, err)
+				suite.Equal(tc.expectedErr, err)
 
 				for _, pre := range tc.prePopulate {
 					value, err := suite.repository.GetSecret(context.Background(), tc.inputEnv, pre.key)
-					suite.Require().NoError(err)
-					suite.Assert().Equal(value, pre.value)
+					suite.NoError(err)
+					suite.Equal(value, pre.value)
 				}
 			} else {
-				suite.Assert().NoError(err)
+				suite.NoError(err)
 
 				// Verify that the inserted secrets match the expected values
 				for key, value := range tc.inputValue {
@@ -432,25 +437,26 @@ func (suite *RedisSecretsRepositorySuite) TestUpsertSecrets() {
 					}
 
 					// Get the stored secret from Redis and decrypt it
-					encrypted, err := suite.client.Get(ctx, suite.repository.GetSecretKey(tc.inputEnv, key)).Bytes()
-					suite.Require().NoError(err)
+					res, err := suite.client.Get(ctx, suite.repository.GetSecretKey(tc.inputEnv, key))
+					suite.NoError(err)
+					encrypted := res.Kvs[0].Value
 
 					decrypted, err := suite.encryptor.Decrypt(ctx, encrypted)
-					suite.Require().NoError(err)
+					suite.NoError(err)
 
 					// Unmarshal the decrypted secret to compare with the expected value
 					var storedValue interface{}
 					err = json.Unmarshal([]byte(decrypted), &storedValue)
-					suite.Require().NoError(err)
+					suite.NoError(err)
 
-					suite.Assert().Equal(expectedValue, storedValue)
+					suite.Equal(expectedValue, storedValue)
 				}
 			}
 		})
 	}
 }
 
-func (suite *RedisSecretsRepositorySuite) TestCloneSecrets() {
+func (suite *EtcdSecretsRepositorySuite) TestCloneSecrets() {
 	testCases := []struct {
 		name        string
 		env         string
@@ -501,6 +507,8 @@ func (suite *RedisSecretsRepositorySuite) TestCloneSecrets() {
 			prePopulate: map[string]interface{}{"key with spaces": "value1", "key/with/slashes": "value2"},
 			expectedErr: nil,
 		},
+		// Add more test cases as needed
+
 	}
 
 	for _, tc := range testCases {
@@ -514,9 +522,10 @@ func (suite *RedisSecretsRepositorySuite) TestCloneSecrets() {
 				suite.NoError(err)
 			}
 
-			keys, err := suite.client.Keys(ctx, repository.SecretPrefix+"*").Result()
+			res, err := suite.client.Get(ctx, suite.repository.GetBaseKey(""), clientv3.WithPrefix())
 			suite.NoError(err)
 
+			keys := res.Kvs
 			suite.Equal(len(keys), len(tc.prePopulate))
 
 			// Act
@@ -526,16 +535,18 @@ func (suite *RedisSecretsRepositorySuite) TestCloneSecrets() {
 			if tc.expectedErr != nil {
 				suite.Equal(tc.expectedErr, err)
 
-				keys, err := suite.client.Keys(ctx, repository.SecretPrefix+"*").Result()
+				res, err := suite.client.Get(ctx, suite.repository.GetBaseKey(""), clientv3.WithPrefix())
 				suite.NoError(err)
+
+				keys := res.Kvs
 				suite.Equal(len(keys), len(tc.prePopulate))
 
 				// ensure the original value has not been changed
 				for key, expectedValue := range tc.prePopulate {
-					value, err := suite.client.Get(ctx, suite.repository.GetSecretKey(tc.env, key)).Bytes()
+					res, err := suite.client.Get(ctx, suite.repository.GetSecretKey(tc.env, key))
 					suite.NoError(err)
 
-					decrypted, err := suite.encryptor.Decrypt(ctx, value)
+					decrypted, err := suite.encryptor.Decrypt(ctx, res.Kvs[0].Value)
 					suite.NoError(err)
 
 					var actualValue interface{}
@@ -548,16 +559,18 @@ func (suite *RedisSecretsRepositorySuite) TestCloneSecrets() {
 				suite.NoError(err)
 
 				// ensure the amount of original + cloned env keys is the expected
-				keys, err := suite.client.Keys(ctx, repository.SecretPrefix+"*").Result()
+				res, err := suite.client.Get(ctx, suite.repository.GetBaseKey(""), clientv3.WithPrefix())
 				suite.NoError(err)
+
+				keys := res.Kvs
 				suite.Equal(len(keys), len(tc.prePopulate)*2)
 
 				for key, expectedValue := range tc.prePopulate {
 					// ensure the original value has not been changed
-					value, err := suite.client.Get(ctx, suite.repository.GetSecretKey(tc.env, key)).Bytes()
+					res, err := suite.client.Get(ctx, suite.repository.GetSecretKey(tc.env, key))
 					suite.NoError(err)
 
-					decrypted, err := suite.encryptor.Decrypt(ctx, value)
+					decrypted, err := suite.encryptor.Decrypt(ctx, res.Kvs[0].Value)
 					suite.NoError(err)
 
 					var actualValue interface{}
@@ -567,10 +580,10 @@ func (suite *RedisSecretsRepositorySuite) TestCloneSecrets() {
 					suite.Equal(expectedValue, actualValue)
 
 					// ensure the cloned value has been created with the same value
-					value, err = suite.client.Get(ctx, suite.repository.GetSecretKey(tc.newEnv, key)).Bytes()
+					res, err = suite.client.Get(ctx, suite.repository.GetSecretKey(tc.newEnv, key))
 					suite.NoError(err)
 
-					decrypted, err = suite.encryptor.Decrypt(ctx, value)
+					decrypted, err = suite.encryptor.Decrypt(ctx, res.Kvs[0].Value)
 					suite.NoError(err)
 
 					var clonedValue interface{}
@@ -584,7 +597,7 @@ func (suite *RedisSecretsRepositorySuite) TestCloneSecrets() {
 	}
 }
 
-func (suite *RedisSecretsRepositorySuite) TestDeleteSecrets() {
+func (suite *EtcdSecretsRepositorySuite) TestDeleteSecrets() {
 	testCases := []struct {
 		name        string
 		env         string
@@ -623,8 +636,9 @@ func (suite *RedisSecretsRepositorySuite) TestDeleteSecrets() {
 				suite.NoError(err)
 			}
 
-			keys, err := suite.client.Keys(ctx, repository.SecretPrefix+"*").Result()
+			res, err := suite.client.Get(ctx, repository.SecretPrefix, clientv3.WithPrefix())
 			suite.NoError(err)
+			keys := res.Kvs
 
 			suite.Equal(len(keys), len(tc.prePopulate))
 
@@ -635,16 +649,18 @@ func (suite *RedisSecretsRepositorySuite) TestDeleteSecrets() {
 			if tc.expectedErr != nil {
 				suite.Equal(tc.expectedErr, err)
 
-				keys, err := suite.client.Keys(ctx, repository.SecretPrefix+"*").Result()
+				res, err := suite.client.Get(ctx, repository.SecretPrefix, clientv3.WithPrefix())
 				suite.NoError(err)
+				keys := res.Kvs
+
 				suite.Equal(len(keys), len(tc.prePopulate))
 
 				// ensure the original value has not been changed
 				for key, expectedValue := range tc.prePopulate {
-					value, err := suite.client.Get(ctx, suite.repository.GetSecretKey(tc.env, key)).Bytes()
+					res, err := suite.client.Get(ctx, suite.repository.GetSecretKey(tc.env, key))
 					suite.NoError(err)
 
-					decrypted, err := suite.encryptor.Decrypt(ctx, value)
+					decrypted, err := suite.encryptor.Decrypt(ctx, res.Kvs[0].Value)
 					suite.NoError(err)
 
 					var actualValue interface{}
@@ -656,8 +672,10 @@ func (suite *RedisSecretsRepositorySuite) TestDeleteSecrets() {
 			} else {
 				suite.NoError(err)
 
-				keys, err := suite.client.Keys(ctx, repository.SecretPrefix+":"+tc.env).Result()
+				res, err := suite.client.Get(ctx, repository.SecretPrefix, clientv3.WithPrefix())
 				suite.NoError(err)
+				keys := res.Kvs
+
 				suite.Equal(len(keys), 0)
 			}
 		})

@@ -15,32 +15,30 @@ import (
 )
 
 const (
-	GlobalPrefix = "global"
-	GroupPrefix  = "group"
-
 	ReadLockMaxRetries    = 3
 	ReadLockRetryInterval = 500 * time.Millisecond
 )
 
 type RedisRepository struct {
 	*rds.Redis
+	keys RedisKeys
 }
 
 func NewRedisRepository(redis *rds.Redis) *RedisRepository {
-	return &RedisRepository{redis}
+	return &RedisRepository{redis, RedisKeys{}}
 }
 
-func (r *RedisRepository) storeConfig(ctx context.Context, envName string, gitRepoName string, config *types.ParsedRepoConfig) error {
+func (r *RedisRepository) storeConfig(ctx context.Context, repo, env string, config *types.ParsedRepoConfig) error {
 	pipeline := r.Client.TxPipeline()
 
 	// Base key prefix based on environment and repository
 	// Key: <repo>:<env>:global|group:<configKey>
-	baseKeyPrefix := r.GetBaseKey(gitRepoName, envName)
+	baseKeyPrefix := r.keys.GetBaseKey(repo, env)
 
 	// Store global configurations
 	// Key: <repo>:<env>:global:<key>
 	for configKey, value := range config.Globals {
-		globalKey := r.GetGlobalKeyKey(baseKeyPrefix, GlobalPrefix, configKey)
+		globalKey := r.keys.GetGlobalKeyKey(baseKeyPrefix, GlobalPrefix, configKey)
 		jsonData, err := json.Marshal(value)
 		if err != nil {
 			return fmt.Errorf("error marshaling global config '%s': %v", configKey, err)
@@ -51,7 +49,7 @@ func (r *RedisRepository) storeConfig(ctx context.Context, envName string, gitRe
 	// Store group configurations
 	// Key: <repo>:<env>:group:<groupName>
 	for groupName, groupConfig := range config.Groups {
-		groupKey := r.GetGroupKey(baseKeyPrefix, groupName)
+		groupKey := r.keys.GetGroupKey(baseKeyPrefix, groupName)
 
 		jsonData, err := json.Marshal(groupConfig)
 		if err != nil {
@@ -69,8 +67,24 @@ func (r *RedisRepository) storeConfig(ctx context.Context, envName string, gitRe
 	return nil
 }
 
-// TODO: test
-func (r *RedisRepository) DeleteConfig(ctx context.Context, env, gitRepoName string) error {
+func (r *RedisRepository) UpsertConfig(ctx context.Context, repo, env string, config *types.ParsedRepoConfig) error {
+	lockKey := r.keys.GetEnvLockKey(env)
+
+	_, err := r.Client.Set(ctx, lockKey, "lock", time.Second).Result()
+	if err != nil {
+		return fmt.Errorf("error acquiring lock: %v", err)
+	}
+	defer r.Client.Del(ctx, lockKey)
+
+	err = r.DeleteConfig(ctx, repo, env)
+	if err != nil {
+		return fmt.Errorf("error acquiring lock: %v", err)
+	}
+
+	return r.storeConfig(ctx, repo, env, config)
+}
+
+func (r *RedisRepository) DeleteConfig(ctx context.Context, repo, env string) error {
 	luaScript := `
         local keys = redis.call('keys', ARGV[1])
         for i=1,#keys do
@@ -79,7 +93,7 @@ func (r *RedisRepository) DeleteConfig(ctx context.Context, env, gitRepoName str
         return #keys
     `
 
-	keyPattern := r.GetCloneEnvDeletePatternKey(gitRepoName, env)
+	keyPattern := r.keys.GetCloneEnvDeletePatternKey(repo, env)
 	result, err := r.Client.Eval(ctx, luaScript, []string{}, keyPattern).Result()
 	if err != nil {
 		return fmt.Errorf("error executing Lua script for deletion: %v", err)
@@ -89,24 +103,7 @@ func (r *RedisRepository) DeleteConfig(ctx context.Context, env, gitRepoName str
 	return nil
 }
 
-func (r *RedisRepository) UpsertConfig(ctx context.Context, env string, gitRepoName string, config *types.ParsedRepoConfig) error {
-	lockKey := fmt.Sprintf("lock:%s", env)
-
-	_, err := r.Client.Set(ctx, lockKey, "lock", time.Second).Result()
-	if err != nil {
-		return fmt.Errorf("error acquiring lock: %v", err)
-	}
-	defer r.Client.Del(ctx, lockKey)
-
-	err = r.DeleteConfig(ctx, env, gitRepoName)
-	if err != nil {
-		return fmt.Errorf("error acquiring lock: %v", err)
-	}
-
-	return r.storeConfig(ctx, env, gitRepoName, config)
-}
-
-func (r *RedisRepository) ReadConfig(ctx context.Context, env string, groups, globalKeys []string) (map[string]interface{}, error) {
+func (r *RedisRepository) ReadConfig(ctx context.Context, repo, env string, groups, globalKeys []string) (map[string]interface{}, error) {
 	err := r.checkLockAndRetry(ctx, env)
 	if err != nil {
 		return nil, fmt.Errorf("error verifying the lock while reading config for environment '%s': %v", env, err)
@@ -117,7 +114,7 @@ func (r *RedisRepository) ReadConfig(ctx context.Context, env string, groups, gl
 		// look for: *:<env>:group:<groupName>
 		// returns provided group collection from any repository
 
-		groupKeyPattern := r.GetGroupPatternKey(env, groupName)
+		groupKeyPattern := r.keys.GetGroupPatternKey(env, groupName)
 		// keys len could be equal to the amount of repositories connected to the configleam
 		// IMP: there will be a small number of group keys
 		groupKeys, err := r.Client.Keys(ctx, groupKeyPattern).Result()
@@ -159,7 +156,7 @@ func (r *RedisRepository) ReadConfig(ctx context.Context, env string, groups, gl
 				if _, ok := combinedGroupConfig[key]; !ok {
 					// fetch global value if not already fetched
 
-					globalKeyPattern := r.GetGlobalPatternKey(env, key)
+					globalKeyPattern := r.keys.GetGlobalPatternKey(env, key)
 					keys, err := r.Client.Keys(ctx, globalKeyPattern).Result()
 					if err != nil {
 						return nil, fmt.Errorf("error reading keys by pattern '%s': %v", globalKeyPattern, err)
@@ -198,7 +195,7 @@ func (r *RedisRepository) ReadConfig(ctx context.Context, env string, groups, gl
 		if _, ok := result[key]; !ok {
 			// look for a global key with next pattern: *:env:global:key
 			// globalKeyPattern := fmt.Sprintf("*:%s:global:%s", env, key)
-			globalKeyPattern := r.GetGlobalPatternKey(env, key)
+			globalKeyPattern := r.keys.GetGlobalPatternKey(env, key)
 			keys, err := r.Client.Keys(ctx, globalKeyPattern).Result()
 			if err != nil {
 				return nil, fmt.Errorf("error reading keys by pattern '%s': %v", globalKeyPattern, err)
@@ -253,8 +250,8 @@ func (r *RedisRepository) checkLockAndRetry(ctx context.Context, env string) err
 	return errors.New("timeout waiting for the lock")
 }
 
-func (r *RedisRepository) CloneConfig(ctx context.Context, cloneEnv, newEnv string, updateGlobal map[string]interface{}) error {
-	matchPattern := r.GetCloneEnvPatternKey(cloneEnv)
+func (r *RedisRepository) CloneConfig(ctx context.Context, repo, cloneEnv, newEnv string, updateGlobal map[string]interface{}) error {
+	matchPattern := r.keys.GetCloneEnvPatternKey(cloneEnv)
 	oldSegment := fmt.Sprintf(":%s:", cloneEnv)
 	newSegment := fmt.Sprintf(":%s:", newEnv)
 
@@ -295,7 +292,7 @@ func (r *RedisRepository) CloneConfig(ctx context.Context, cloneEnv, newEnv stri
 		pipeline := r.Client.Pipeline()
 
 		for k, v := range updateGlobal {
-			globalKeyMatchPattern := r.GetGlobalPatternKey(cloneEnv, k)
+			globalKeyMatchPattern := r.keys.GetGlobalPatternKey(cloneEnv, k)
 
 			globalKeys, err := r.Client.Keys(ctx, globalKeyMatchPattern).Result()
 			if err != nil {
@@ -345,17 +342,9 @@ func (r *RedisRepository) HealthCheck(ctx context.Context) error {
 	return nil
 }
 
-// EnvParams represents parameters for managing environment metadata.
-type EnvParams struct {
-	Name     string
-	Version  string
-	Clone    bool
-	Original string
-}
-
 // AddEnv adds metadata for a new environment to the repository.
-func (r *RedisRepository) AddEnv(ctx context.Context, envName string, params EnvParams) error {
-	if len(envName) < 1 {
+func (r *RedisRepository) AddEnv(ctx context.Context, env string, params EnvParams) error {
+	if len(env) < 1 {
 		return errors.New("environment name cannot be empty")
 	}
 
@@ -365,7 +354,7 @@ func (r *RedisRepository) AddEnv(ctx context.Context, envName string, params Env
 	fields["clone"] = params.Clone
 	fields["original"] = params.Original
 
-	_, err := r.Client.HMSet(ctx, r.GetEnvKey(envName), fields).Result()
+	_, err := r.Client.HMSet(ctx, r.keys.GetEnvKey(env), fields).Result()
 	if err != nil {
 		return fmt.Errorf("failed to add environment metadata: %w", err)
 	}
@@ -373,12 +362,12 @@ func (r *RedisRepository) AddEnv(ctx context.Context, envName string, params Env
 }
 
 // DeleteEnv removes metadata for the specified environment from the repository.
-func (r *RedisRepository) DeleteEnv(ctx context.Context, envName string) error {
-	if len(envName) < 1 {
+func (r *RedisRepository) DeleteEnv(ctx context.Context, env string) error {
+	if len(env) < 1 {
 		return errors.New("environment name cannot be empty")
 	}
 
-	err := r.Client.HGetAll(ctx, r.GetEnvKey(envName)).Err()
+	err := r.Client.HGetAll(ctx, r.keys.GetEnvKey(env)).Err()
 	if err == redis.Nil {
 		return nil
 	}
@@ -389,12 +378,12 @@ func (r *RedisRepository) DeleteEnv(ctx context.Context, envName string) error {
 }
 
 // GetEnvOriginal retrieves the original value of the specified environment from the repository.
-func (r *RedisRepository) GetEnvOriginal(ctx context.Context, envName string) (string, bool, error) {
-	if len(envName) < 1 {
+func (r *RedisRepository) GetEnvOriginal(ctx context.Context, env string) (string, bool, error) {
+	if len(env) < 1 {
 		return "", false, errors.New("environment name cannot be empty")
 	}
 
-	original, err := r.Client.HGet(ctx, r.GetEnvKey(envName), "original").Result()
+	original, err := r.Client.HGet(ctx, r.keys.GetEnvKey(env), "original").Result()
 	if err == redis.Nil {
 		return "", false, nil
 	}
@@ -405,12 +394,12 @@ func (r *RedisRepository) GetEnvOriginal(ctx context.Context, envName string) (s
 }
 
 // SetEnvVersion sets the version metadata for the specified environment in the repository.
-func (r *RedisRepository) SetEnvVersion(ctx context.Context, envName string, version string) error {
-	if len(envName) < 1 {
+func (r *RedisRepository) SetEnvVersion(ctx context.Context, env string, version string) error {
+	if len(env) < 1 {
 		return errors.New("environment name cannot be empty")
 	}
 
-	err := r.Client.HSet(ctx, r.GetEnvKey(envName), "version", version).Err()
+	err := r.Client.HSet(ctx, r.keys.GetEnvKey(env), "version", version).Err()
 	if err != nil {
 		return fmt.Errorf("failed to set environment version: %w", err)
 	}
@@ -419,40 +408,40 @@ func (r *RedisRepository) SetEnvVersion(ctx context.Context, envName string, ver
 
 // GetAllEnvs retrieves all available environments from the repository.
 func (r *RedisRepository) GetAllEnvs(ctx context.Context) ([]EnvParams, error) {
-	keys, err := r.Client.Keys(ctx, r.GetAllEnvsPatternKey()).Result()
+	keys, err := r.Client.Keys(ctx, r.keys.GetAllEnvsPatternKey()).Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get all environments keys: %w", err)
 	}
 
-	environments := make([]EnvParams, 0, len(keys))
+	envs := make([]EnvParams, 0, len(keys))
 	for _, key := range keys {
 		envName := r.extractEnvName(key)
 		envParams, err := r.GetEnvParams(ctx, envName)
 		if err != nil {
 			return nil, err
 		}
-		environments = append(environments, envParams)
+		envs = append(envs, envParams)
 	}
 
-	return environments, nil
+	return envs, nil
 }
 
 // GetEnvParams retrieves the environment metadata for the specified key.
-func (r *RedisRepository) GetEnvParams(ctx context.Context, envName string) (EnvParams, error) {
-	if len(envName) < 1 {
+func (r *RedisRepository) GetEnvParams(ctx context.Context, env string) (EnvParams, error) {
+	if len(env) < 1 {
 		return EnvParams{}, errors.New("environment name cannot be empty")
 	}
 
-	values, err := r.Client.HGetAll(ctx, r.GetEnvKey(envName)).Result()
+	values, err := r.Client.HGetAll(ctx, r.keys.GetEnvKey(env)).Result()
 	if err != nil {
 		return EnvParams{}, fmt.Errorf("failed to get environment metadata: %w", err)
 	}
 	if len(values) < 1 {
-		return EnvParams{}, EnvNotFoundError{Key: envName}
+		return EnvParams{}, EnvNotFoundError{Key: env}
 	}
 
 	return EnvParams{
-		Name:     envName,
+		Name:     env,
 		Version:  values["version"],
 		Clone:    values["clone"] == "1",
 		Original: values["original"],
@@ -461,5 +450,5 @@ func (r *RedisRepository) GetEnvParams(ctx context.Context, envName string) (Env
 
 // extractEnvName extracts the environment name from the key.
 func (r *RedisRepository) extractEnvName(key string) string {
-	return strings.TrimPrefix(key, r.GetEnvKey(""))
+	return strings.TrimPrefix(key, r.keys.GetEnvKey(""))
 }

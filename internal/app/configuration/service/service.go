@@ -111,7 +111,7 @@ func (s *ConfigurationService) ReadConfig(ctx context.Context, env string, group
 		return nil, errors.New("permissions were not found")
 	}
 
-	cfg, err := s.repository.ReadConfig(ctx, env, groups, globals)
+	cfg, err := s.repository.ReadConfig(ctx, s.gitrepo.Name, env, groups, globals)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read configuration: %w", err)
 	}
@@ -215,7 +215,7 @@ func (s *ConfigurationService) buildConfigFromLocalRepo(ctx context.Context) err
 		}
 
 		log.Printf("Upserting new repo config for environment '%s'", env.Name)
-		err = s.repository.UpsertConfig(ctx, env.Name, s.gitrepo.Name, repoConfig)
+		err = s.repository.UpsertConfig(ctx, s.gitrepo.Name, env.Name, repoConfig)
 		if err != nil {
 			log.Printf("Error upserting config for environment '%s' with error %v:", env.Name, err)
 			return err
@@ -253,7 +253,7 @@ func (s *ConfigurationService) DeleteConfig(ctx context.Context, deleteEnv strin
 		}
 	}
 
-	err := s.repository.DeleteConfig(ctx, deleteEnv, "*")
+	err := s.repository.DeleteConfig(ctx, s.gitrepo.Name, deleteEnv)
 	if err != nil {
 		log.Printf("Error deleting config environment '%s' with error %v:", deleteEnv, err)
 		return err
@@ -268,34 +268,30 @@ func (s *ConfigurationService) DeleteConfig(ctx context.Context, deleteEnv strin
 	return nil
 }
 
-func (s *ConfigurationService) HealthCheck(ctx context.Context) error {
-	return s.repository.HealthCheck(ctx)
-}
-
-func (s *ConfigurationService) CloneConfig(ctx context.Context, cloneEnv, newEnv string, updateGlobals map[string]interface{}) error {
+func (s *ConfigurationService) CloneConfig(ctx context.Context, env, newEnv string, updateGlobals map[string]interface{}) error {
 	found := false
 
-	for env := range s.envs {
-		if env == cloneEnv {
+	for e := range s.envs {
+		if e == env {
 			found = true
 			break
 		}
 	}
 
 	if !found {
-		return fmt.Errorf("env %s for cloning has not been found", cloneEnv)
+		return fmt.Errorf("env %s for cloning has not been found", env)
 	}
 
 	s.gitrepo.Mux.Lock()
 	defer s.gitrepo.Mux.Unlock()
 
-	if err := s.repository.CloneConfig(ctx, cloneEnv, newEnv, updateGlobals); err != nil {
+	if err := s.repository.CloneConfig(ctx, s.gitrepo.Name, env, newEnv, updateGlobals); err != nil {
 		return err
 	}
 
-	if err := s.secrets.CloneSecrets(ctx, cloneEnv, newEnv); err != nil {
-		log.Printf("Error cloning secrets for %s to %s: %v", cloneEnv, newEnv, err)
-		if delErr := s.repository.DeleteConfig(ctx, newEnv, "*"); delErr != nil {
+	if err := s.secrets.CloneSecrets(ctx, env, newEnv); err != nil {
+		log.Printf("Error cloning secrets for %s to %s: %v", env, newEnv, err)
+		if delErr := s.repository.DeleteConfig(ctx, s.gitrepo.Name, newEnv); delErr != nil {
 			log.Printf("Error cleaning up config for '%s' after failed secrets clone: %v", newEnv, delErr)
 		}
 		return err
@@ -305,12 +301,12 @@ func (s *ConfigurationService) CloneConfig(ctx context.Context, cloneEnv, newEnv
 		Name:     s.gitrepo.Name,
 		Version:  s.gitrepo.LastTag,
 		Clone:    true,
-		Original: cloneEnv,
+		Original: env,
 	}
 	err := s.repository.AddEnv(ctx, newEnv, newEnvParams)
 	if err != nil {
-		log.Printf("Error adding clone '%s' of environment '%s': %v", cloneEnv, newEnv, err)
-		if delErr := s.repository.DeleteConfig(ctx, newEnv, "*"); delErr != nil {
+		log.Printf("Error adding clone '%s' of environment '%s': %v", env, newEnv, err)
+		if delErr := s.repository.DeleteConfig(ctx, s.gitrepo.Name, newEnv); delErr != nil {
 			log.Printf("Error cleaning up config for %s after failed adding clone: %v", newEnv, delErr)
 		}
 		return err
@@ -320,8 +316,13 @@ func (s *ConfigurationService) CloneConfig(ctx context.Context, cloneEnv, newEnv
 }
 
 func (s *ConfigurationService) GetEnvs(ctx context.Context) []string {
-	// params, err := s.repository.GetAllEnvs(ctx)
-	return []string{}
+	envs := make([]string, 0, len(s.envs))
+
+	for env := range s.envs {
+		envs = append(envs, env)
+	}
+
+	return envs
 }
 
 func (s *ConfigurationService) IsEnvOriginal(ctx context.Context, env string) bool {
