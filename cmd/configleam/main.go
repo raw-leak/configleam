@@ -38,7 +38,6 @@ func run() error {
 	encryptor, err := encryptor.NewEncryptor("")
 	if err != nil {
 		return err
-
 	}
 
 	accessSet, err := access.Init(ctx, cfg, encryptor, perms)

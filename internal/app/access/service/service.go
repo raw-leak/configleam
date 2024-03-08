@@ -16,7 +16,6 @@ type AccessService struct {
 	repository interfaces.AccessRepository
 }
 
-// TODO: test
 // New creates a new instance of AccessService service.
 func New(keys interfaces.Keys, perms interfaces.Permissions, repository interfaces.AccessRepository) *AccessService {
 	return &AccessService{

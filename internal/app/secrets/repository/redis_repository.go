@@ -13,15 +13,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-const (
-	SecretPrefix = "configleam:secret:"
-)
-
-type Encryptor interface {
-	Encrypt(ctx context.Context, b []byte) ([]byte, error)
-	Decrypt(ctx context.Context, b []byte) ([]byte, error)
-}
-
 type RedisRepository struct {
 	*rds.Redis
 	encryptor Encryptor
@@ -31,7 +22,6 @@ func NewRedisRepository(redis *rds.Redis, encryptor Encryptor) *RedisRepository 
 	return &RedisRepository{redis, encryptor}
 }
 
-// GetSecret retrieves a secret from Redis.
 func (r *RedisRepository) GetSecret(ctx context.Context, env, fullKey string) (interface{}, error) {
 	keyPath := strings.Split(fullKey, ".")
 	if len(keyPath) < 1 {
@@ -76,7 +66,6 @@ func (r *RedisRepository) GetSecret(ctx context.Context, env, fullKey string) (i
 	return nil, nil
 }
 
-// UpsertSecret stores a secret in Redis.
 func (r *RedisRepository) UpsertSecrets(ctx context.Context, env string, secrets map[string]interface{}) error {
 	if len(secrets) < 1 {
 		return errors.New("provided configuration is empty")
@@ -119,7 +108,6 @@ func (r *RedisRepository) UpsertSecrets(ctx context.Context, env string, secrets
 	return nil
 }
 
-// UpsertSecret stores a secret in Redis.
 func (r *RedisRepository) GetSecretKey(env, key string) string {
 	return fmt.Sprintf("%s:%s:%s", SecretPrefix, env, key)
 }
@@ -142,7 +130,6 @@ func (r *RedisRepository) getValueByNestedKeys(m map[string]interface{}, keys []
 	return val, true
 }
 
-// TODO: test
 func (r *RedisRepository) CloneSecrets(ctx context.Context, cloneEnv, newEnv string) error {
 	matchPattern := r.GetCloneSecretsPatternKey(cloneEnv)
 	oldSegment := fmt.Sprintf(":%s:", cloneEnv)
@@ -184,7 +171,6 @@ func (r *RedisRepository) CloneSecrets(ctx context.Context, cloneEnv, newEnv str
 	return nil
 }
 
-// TODO: test
 func (r *RedisRepository) DeleteSecrets(ctx context.Context, env string) error {
 	luaScript := `
         local keys = redis.call('keys', ARGV[1])
@@ -204,27 +190,10 @@ func (r *RedisRepository) DeleteSecrets(ctx context.Context, env string) error {
 	return nil
 }
 
-func (r *RedisRepository) HealthCheck(ctx context.Context) error {
-	_, err := r.Client.Ping(ctx).Result()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (r *RedisRepository) GetCloneSecretsPatternKey(cloneEnv string) string {
-	return fmt.Sprintf("%s:*:%s:*", SecretPrefix, cloneEnv)
+	return fmt.Sprintf("%s:%s:*", SecretPrefix, cloneEnv)
 }
 
 func (r *RedisRepository) GetCloneSecretsDeletePatternKey(clonedEnv string) string {
 	return fmt.Sprintf("%s:*:%s:*", SecretPrefix, clonedEnv)
-}
-
-type SecretNotFoundError struct {
-	Key string
-}
-
-func (e SecretNotFoundError) Error() string {
-	return fmt.Sprintf("secret '%s' not found", e.Key)
 }

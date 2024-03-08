@@ -12,19 +12,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-const (
-	AccessPrefix = "configleam:access"
-	KeyPrefix    = "key"
-	MetaPrefix   = "meta"
-	SetPrefix    = "set"
-)
-
-type Encryptor interface {
-	Encrypt(ctx context.Context, b []byte) ([]byte, error)
-	EncryptDet(ctx context.Context, b []byte) ([]byte, error)
-	Decrypt(ctx context.Context, b []byte) ([]byte, error)
-}
-
 type RedisRepository struct {
 	*rds.Redis
 	encryptor Encryptor
@@ -34,7 +21,6 @@ func NewRedisRepository(redis *rds.Redis, encryptor Encryptor) *RedisRepository 
 	return &RedisRepository{redis, encryptor}
 }
 
-// TODO: test
 func (r *RedisRepository) StoreAccessKey(ctx context.Context, accessKey AccessKey) error {
 	perms, err := json.Marshal(accessKey.Perms)
 	if err != nil {
@@ -191,14 +177,4 @@ func (r *RedisRepository) GetAccessMetaKey(key string) string {
 
 func (r *RedisRepository) GetAccessSetKey() string {
 	return fmt.Sprintf("%s:%s", AccessPrefix, SetPrefix)
-}
-
-// TODO: test
-func (r *RedisRepository) HealthCheck(ctx context.Context) error {
-	_, err := r.Client.Ping(ctx).Result()
-	if err != nil {
-		return err
-	}
-
-	return nil
 }

@@ -13,6 +13,11 @@ import (
 
 type configParser struct{}
 
+const (
+	GroupPrefix    = "group:"
+	GroupPrefixLen = len(GroupPrefix)
+)
+
 func New() *configParser {
 	return &configParser{}
 }
@@ -39,12 +44,10 @@ func (p *configParser) ParseConfigList(repoConfigList *types.ExtractedConfigList
 
 	for _, config := range *repoConfigList {
 		for key, value := range config {
-			// we store all the keys we are generating in this file
-			if ok := helper.Contains(parsedCfg.AllKeys, key); !ok {
-				parsedCfg.AllKeys = append(parsedCfg.AllKeys, key)
-			}
 
-			if strings.HasPrefix(key, "group:") {
+			if strings.HasPrefix(key, GroupPrefix) {
+				key = key[GroupPrefixLen:]
+
 				groupCfg, ok := parsedCfg.Groups[key]
 				if !ok {
 					groupCfg = types.GroupConfig{
@@ -110,6 +113,11 @@ func (p *configParser) ParseConfigList(repoConfigList *types.ExtractedConfigList
 				// global configuration:
 				// globalKey: <any>
 				parsedCfg.Globals[key] = value
+			}
+
+			// we store all the keys we are generating in this file
+			if ok := helper.Contains(parsedCfg.AllKeys, key); !ok {
+				parsedCfg.AllKeys = append(parsedCfg.AllKeys, key)
 			}
 		}
 	}
