@@ -3,6 +3,7 @@ config.json
 
 build/
 repositories/
+certs/
 .vscode/
 certs/
 

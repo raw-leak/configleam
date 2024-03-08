@@ -27,10 +27,12 @@ type RepositoryConfig struct {
 	RedisAddrs    string
 	RedisUsername string
 	RedisPassword string
+	RedisTLS      bool
 
 	EtcdAddrs    []string
 	EtcdUsername string
 	EtcdPassword string
+	EtcdTLS      bool
 }
 
 func New(ctx context.Context, cfg RepositoryConfig, encryptor Encryptor) (Repository, error) {
@@ -39,6 +41,7 @@ func New(ctx context.Context, cfg RepositoryConfig, encryptor Encryptor) (Reposi
 			Addr:     cfg.RedisAddrs,
 			Password: cfg.RedisPassword,
 			Username: cfg.RedisUsername,
+			TLS:      cfg.RedisTLS,
 		})
 		if err != nil {
 			return nil, err
@@ -52,6 +55,7 @@ func New(ctx context.Context, cfg RepositoryConfig, encryptor Encryptor) (Reposi
 			EtcdAddrs:    cfg.EtcdAddrs,
 			EtcdUsername: cfg.EtcdUsername,
 			EtcdPassword: cfg.EtcdPassword,
+			TLS:          cfg.EtcdTLS,
 		})
 		if err != nil {
 			return nil, err

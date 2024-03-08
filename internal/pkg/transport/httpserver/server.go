@@ -2,11 +2,11 @@ package httpserver
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"path"
+	"path/filepath"
 
 	"github.com/raw-leak/configleam/internal/pkg/auth"
 	"github.com/raw-leak/configleam/internal/pkg/auth/templates"
@@ -34,7 +34,7 @@ func NewHttpServer(configuration ConfigurationSet, secrets SecretsSet, access Ac
 	}
 }
 
-func (s *httpServer) ListenAndServe(httpAddr string) error {
+func (s *httpServer) ListenAndServe(httpAddr string, enableTls bool) error {
 	mux := http.NewServeMux()
 
 	endpoints := newHandlers(s.configuration)
@@ -66,26 +66,18 @@ func (s *httpServer) ListenAndServe(httpAddr string) error {
 
 	// dashboard business handlers
 	mux.HandleFunc("GET /dashboard", auth.GuardDashboard()(s.dashboard.HomeHandler))
-
 	mux.HandleFunc("GET /dashboard/config", auth.GuardDashboard()(s.dashboard.ConfigHandler))
-
 	mux.HandleFunc("GET /dashboard/access", auth.GuardDashboard()(s.dashboard.AccessHandler))
 	mux.HandleFunc("GET /dashboard/access/create", auth.GuardDashboard()(s.dashboard.CreateAccessKeyParamsHandler))
 	mux.HandleFunc("POST /dashboard/access/create", auth.GuardDashboard()(s.dashboard.CreateAccessKeyHandler))
 	mux.HandleFunc("POST /dashboard/access/delete", auth.GuardDashboard()(s.dashboard.DeleteAccessKeyHandler))
 
 	// serve static
-	dir, err := os.Getwd()
-	if err != nil {
-		log.Fatal(err)
-	}
+	staticDir := http.Dir("static")
+	staticHandler := http.StripPrefix("/static/", http.FileServer(staticDir))
+	mux.Handle("/static/", staticHandler)
 
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(path.Join(dir, "static")))))
-
-	s.server = &http.Server{Addr: fmt.Sprintf(":%s", httpAddr), Handler: mux}
-
-	log.Printf("Starting HTTP server on port %s\n", httpAddr)
-	return s.server.ListenAndServe()
+	return s.startServer(httpAddr, mux, enableTls)
 }
 
 func (t *httpServer) Shutdown(ctx context.Context) error {
@@ -93,4 +85,31 @@ func (t *httpServer) Shutdown(ctx context.Context) error {
 		return t.server.Shutdown(ctx)
 	}
 	return nil
+}
+
+func (s *httpServer) startServer(httpAddr string, mux http.Handler, enableTls bool) error {
+	if enableTls {
+		certPath := filepath.Join("certs", "cert.pem")
+		keyPath := filepath.Join("certs", "key.pem")
+
+		cert, err := tls.LoadX509KeyPair(certPath, keyPath)
+		if err != nil {
+			log.Println("failed to load TLS certificate:", err)
+			return fmt.Errorf("failed to load TLS certificate: %v", err)
+		}
+
+		tlsConfig := &tls.Config{
+			Certificates: []tls.Certificate{cert},
+		}
+
+		s.server = &http.Server{Addr: fmt.Sprintf(":%s", httpAddr), Handler: mux, TLSConfig: tlsConfig}
+
+		log.Printf("Starting HTTPS server on port %s\n", httpAddr)
+		return s.server.ListenAndServeTLS(certPath, keyPath)
+	} else {
+		s.server = &http.Server{Addr: fmt.Sprintf(":%s", httpAddr), Handler: mux}
+
+		log.Printf("Starting HTTP server on port %s\n", httpAddr)
+		return s.server.ListenAndServe()
+	}
 }

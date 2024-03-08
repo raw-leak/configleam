@@ -23,11 +23,13 @@ func (b *Bool) UnmarshalText(text []byte) error {
 type Config struct {
 	Port         string        `envconfig:"PORT"`
 	Hostname     string        `envconfig:"HOSTNAME"`
+	Tls          Bool          `envconfig:"TLS" default:"true"`
 	PullInterval time.Duration `envconfig:"CG_PULL_INTERVAL"`
 
 	RedisAddrs    string `envconfig:"REDIS_ADDRS"`
 	RedisUsername string `envconfig:"REDIS_USERNAME"`
 	RedisPassword string `envconfig:"REDIS_PASSWORD"`
+	RedisTls      Bool   `envconfig:"REDIS_TLS"`
 
 	EtcdAddrs    []string `envconfig:"ETCD_ADDRS" delim:","`
 	EtcdUsername string   `envconfig:"ETCD_USERNAME"`
