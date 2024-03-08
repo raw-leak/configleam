@@ -15,7 +15,6 @@ type ConfigurationSet interface {
 }
 
 type ConfigurationService interface {
-	HealthCheck(ctx context.Context) error
 	IsEnvOriginal(ctx context.Context, env string) bool
 	GetEnvOriginal(ctx context.Context, env string) (string, bool, error)
 }

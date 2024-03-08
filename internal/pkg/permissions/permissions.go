@@ -14,6 +14,7 @@ const (
 
 // AccessKeyPermissionsBuilder allows building new Access Key Permissions
 type AccessKeyPermissionsBuilder struct{}
+
 type AvailableAccessKeyPermissions struct {
 	EnvAdminAccess   bool `json:"envAdminAccess"`
 	ReadConfig       bool `json:"readConfig"`

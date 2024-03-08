@@ -9,7 +9,7 @@ import (
 )
 
 type EtcdConfig struct {
-	EtcdAddrs    string
+	EtcdAddrs    []string
 	EtcdUsername string
 	EtcdPassword string
 }
@@ -18,10 +18,12 @@ type Etcd struct {
 	Client *clientv3.Client
 }
 
-// TODO: provide support for etcd
 func New(ctx context.Context, config EtcdConfig) (*Etcd, error) {
-	return nil, nil
-	client, err := clientv3.New(clientv3.Config{})
+	client, err := clientv3.New(clientv3.Config{
+		Endpoints: config.EtcdAddrs,
+		Username:  config.EtcdUsername,
+		Password:  config.EtcdPassword,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +36,7 @@ func New(ctx context.Context, config EtcdConfig) (*Etcd, error) {
 		_ = client.Close()
 		return nil, err
 	}
-	return &Etcd{Client: client}, nil
+	return &Etcd{client}, nil
 }
 
 func (e *Etcd) Disconnect(ctx context.Context) {

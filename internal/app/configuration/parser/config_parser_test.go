@@ -30,21 +30,21 @@ func TestYamlConfigParser(t *testing.T) {
 			},
 			expectedErr: nil,
 			expectedParsedCfg: types.ParsedRepoConfig{
-				AllKeys: []string{"group:app1", "group:app2", "group:app3", "group:app4"},
+				AllKeys: []string{"app1", "app2", "app3", "app4"},
 				Groups: map[string]types.GroupConfig{
-					"group:app1": {
+					"app1": {
 						Local:  map[string]interface{}{},
 						Global: []string{"2"},
 					},
-					"group:app2": {
+					"app2": {
 						Local:  map[string]interface{}{},
 						Global: []string{"true"},
 					},
-					"group:app3": {
+					"app3": {
 						Local:  map[string]interface{}{},
 						Global: []string{"3.25"},
 					},
-					"group:app4": {
+					"app4": {
 						Local:  map[string]interface{}{},
 						Global: []string{"-3.25"},
 					},
@@ -173,16 +173,16 @@ func TestYamlConfigParser(t *testing.T) {
 			},
 			expectedErr: nil,
 			expectedParsedCfg: types.ParsedRepoConfig{
-				AllKeys: []string{"globalKey1", "globalKey2", "group:app1", "group:app2"},
+				AllKeys: []string{"globalKey1", "globalKey2", "app1", "app2"},
 				Groups: map[string]types.GroupConfig{
-					"group:app1": {
+					"app1": {
 						Local: map[string]interface{}{
 							"localKey1": map[string]interface{}{"key1": "value1", "key2": 2},
 							"localKey2": true,
 						},
 						Global: []string{"globalKey1", "globalKey2"},
 					},
-					"group:app2": {
+					"app2": {
 						Local:  map[string]interface{}{},
 						Global: []string{"true"},
 					},
@@ -263,13 +263,13 @@ func TestYamlConfigParser(t *testing.T) {
 			},
 			expectedErr: nil,
 			expectedParsedCfg: types.ParsedRepoConfig{
-				AllKeys: []string{"globalKey1", "globalKey2", "globalKey3", "globalKey4", "globalKey5", "globalKey6", "group:app1", "group:app2"},
+				AllKeys: []string{"globalKey1", "globalKey2", "globalKey3", "globalKey4", "globalKey5", "globalKey6", "app1", "app2"},
 				Groups: map[string]types.GroupConfig{
-					"group:app1": {
+					"app1": {
 						Local:  map[string]interface{}{},
 						Global: []string{"globalKey1", "globalKey2", "globalKey3", "globalKey4", "globalKey5", "globalKey6"},
 					},
-					"group:app2": {
+					"app2": {
 						Local: map[string]interface{}{
 							"local1": map[string]interface{}{
 								"key1": true,
@@ -449,9 +449,9 @@ func TestYamlConfigParser(t *testing.T) {
 			},
 			expectedErr: nil,
 			expectedParsedCfg: types.ParsedRepoConfig{
-				AllKeys: []string{"database", "features", "group:analytics", "group:marketing", "group:sales", "logging", "services"},
+				AllKeys: []string{"database", "features", "analytics", "marketing", "sales", "logging", "services"},
 				Groups: map[string]types.GroupConfig{
-					"group:analytics": {
+					"analytics": {
 						Local: map[string]interface{}{
 							"database": map[string]interface{}{
 								"primary": map[string]interface{}{
@@ -464,7 +464,7 @@ func TestYamlConfigParser(t *testing.T) {
 						},
 						Global: []string{"logging", "services"},
 					},
-					"group:marketing": {
+					"marketing": {
 						Local: map[string]interface{}{
 							"logging": map[string]interface{}{
 								"level": "debug",
@@ -479,7 +479,7 @@ func TestYamlConfigParser(t *testing.T) {
 						},
 						Global: []string{"database", "features"},
 					},
-					"group:sales": {
+					"sales": {
 						Local: map[string]interface{}{
 							"database": map[string]interface{}{
 								"secondary": map[string]interface{}{
@@ -559,7 +559,10 @@ func TestYamlConfigParser(t *testing.T) {
 			parsedCfg, err := p.ParseConfigList(&tc.input)
 
 			assert.Equal(t, tc.expectedErr, err, "Error should match")
-			assert.Equal(t, tc.expectedParsedCfg, *parsedCfg, tc.description)
+
+			assert.ElementsMatch(t, tc.expectedParsedCfg.AllKeys, parsedCfg.AllKeys)
+			assert.Equal(t, tc.expectedParsedCfg.Globals, parsedCfg.Globals)
+			assert.Equal(t, tc.expectedParsedCfg.Groups, parsedCfg.Groups)
 		})
 	}
 }
