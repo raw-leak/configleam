@@ -34,6 +34,7 @@ type Config struct {
 	EtcdAddrs    []string `envconfig:"ETCD_ADDRS" delim:","`
 	EtcdUsername string   `envconfig:"ETCD_USERNAME"`
 	EtcdPassword string   `envconfig:"ETCD_PASSWORD"`
+	EtcdTls      Bool     `envconfig:"ETCD_TLS"`
 
 	// cfg repo
 	RepoUrl    string   `envconfig:"GIT_REPOSITORY_URL"`

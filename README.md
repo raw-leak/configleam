@@ -1,10 +1,24 @@
-# Configleam 
+<div align="center">
+ <h1> Configleam </h1>
+
+  ![GitHub go.mod Go version (branch & subdirectory of monorepo)](https://img.shields.io/github/go-mod/go-version/raw-leak/configleam/main)
+  ![GitHub Repo stars](https://img.shields.io/github/stars/raw-leak/configleam)
+  ![License](https://img.shields.io/badge/license-MIT-green)
+[![Go Report Card](https://goreportcard.com/badge/github.com/raw-leak/configleam)](https://goreportcard.com/report/github.com/raw-leak/configleam)
+  ![Github Repository Size](https://img.shields.io/github/repo-size/raw-leak/configleam)
+  ![GitHub contributors](https://img.shields.io/github/contributors/raw-leak/configleam)
+  ![Github Open Issues](https://img.shields.io/github/issues/raw-leak/configleam)
+  ![Github Closed Issues](https://img.shields.io/github/issues-closed/raw-leak/configleam)
+  
+</div>
 
 Configleam is an open-source project aimed at providing a dynamic, simple, and efficient way to manage and synchronize configuration files for microservices. It is designed to work natively within Kubernetes environments, leveraging Git repositories for storing and retrieving configurations.
 
 ## Table of Contents
 
 - [Status](#status)
+- [Client Libraries](#client-libraries)
+- [Docker Image](#docker-image)
 - [Installation](#installation)
 - [Usage](#usage)
 - [Configuration Repository Structure](#configuration-repository-structure)
@@ -17,6 +31,23 @@ Configleam is an open-source project aimed at providing a dynamic, simple, and e
 ## Status
 
 This project is currently `in-progress`. I am actively developing its core features and invite contributions and feedback from the community.
+
+## Client Libraries
+
+To interact with our project, you can utilize the following client libraries:
+
+- **JavaScript**: [Link to JavaScript client library](https://github.com/raw-leak/configleam-js-client)
+- **Nest.js**: [Link to Nest.js client library](https://github.com/raw-leak/configleam-nestjs-client)
+- **Golang**: *Coming Soon*
+
+Feel free to explore and integrate these libraries into your project for seamless communication.
+
+## Docker Image
+
+Deploy our project effortlessly with Docker containers. (*Coming Soon*)
+
+- **(*Coming Soon*)**: [Docker Image](https://hub.docker.com/r/rawleak/configleam)
+
 
 ## Installation
 
@@ -198,7 +229,7 @@ group:analytics:
   - additionalMetrics: true # local
 
 group:marketing:
-  - database # local
+  - database # global
   - featureFlags: # local
       betaFeatures: true
   - marketingCampaignsEnabled: true # local
@@ -207,9 +238,9 @@ group:marketing:
 
 In this example: 
 
-Analytics Group (`group:analytics`): Inherits the global featureFlags and modifies the global database settings for its specific needs. It also includes an analytics-specific setting additionalMetrics.
+Analytics Group (`group:analytics`): Inherits the global `featureFlags` and modifies the global database settings for its specific needs. It also includes an analytics-specific setting `additionalMetrics`.
 
-Marketing Group (`group:marketing:`): Inherits the global database configuration and overrides the featureFlags setting. It introduces a marketing-specific setting marketingCampaignsEnabled.
+Marketing Group (`group:marketing:`): Inherits the global `database` configuration and overrides the featureFlags setting. It introduces a marketing-specific setting `marketingCampaignsEnabled`.
 
 ### Notes
 
@@ -221,7 +252,7 @@ Marketing Group (`group:marketing:`): Inherits the global database configuration
 
 ## Security
 
-Configleam implements granular permissions to provide precise control over user actions within Configleam. Each endpoint is guarded by an authorization header ("X-Access-Key"), ensuring that only authenticated users with valid access keys can access the system. Additionally, we've implemented endpoints accessible exclusively for administrators to generate and delete access keys.
+Configleam prioritizes security by implementing granular permissions and robust access control, ensuring that each endpoint is protected by an "X-Access-Key" authorization header to permit only authenticated users with valid access keys to utilize the system. These access keys, essential for system access, are securely encrypted to safeguard against unauthorized use. Furthermore, Configleam enhances data protection by encrypting secrets, such as passwords and API keys, using advanced encryption algorithms. This comprehensive approach to security, encompassing both access key encryption and secret data encryption, guarantees a high level of data integrity and confidentiality, reinforcing Configleam's commitment to maintaining a secure and trustworthy environment for managing configurations.
 
 <details>
 <summary>More on Security</summary>
@@ -340,6 +371,31 @@ Response Example:
   - Endpoint: `DELETE /access`
   - Description: This endpoint allows administrators to delete access keys.
 
+#### Secure Storage of Access Keys
+
+In Configleam, we ensure the security of access keys through robust encryption standards. Access keys serve as a crucial component in the authentication and authorization process, granting users the necessary permissions to perform actions within the system.
+
+- **Encryption Algorithm:**
+  - Access keys and their associated permissions are encrypted using the ChaCha20-Poly1305 algorithm. This modern encryption method provides both high security against brute force attacks and efficient performance, making it an ideal choice for protecting sensitive information.
+  
+**Importance of Encryption for Access Keys:**
+
+- **Confidentiality:** Encrypting access keys prevents unauthorized access, ensuring that only authenticated and authorized users can perform operations within Configleam.
+- **Integrity and Authenticity:** ChaCha20-Poly1305 includes Poly1305, a powerful message authentication code (MAC) that verifies the integrity and authenticity of the encrypted data, safeguarding against tampering and forgery.
+- **Compliance and Trust:** Adhering to advanced encryption standards helps Configleam comply with strict data protection regulations, building trust with users by demonstrating a commitment to data security.
+
+#### Secure Handling of Secrets
+
+Secrets management is a critical aspect of Configleam's security framework. Secrets, such as passwords, tokens, and API keys, require stringent protection measures to prevent exposure and misuse.
+
+- **Encryption Approach:**
+  - Like access keys, secrets are encrypted using the ChaCha20-Poly1305 algorithm. This ensures a consistent and high level of security across all sensitive data managed by Configleam, protecting secrets at rest and in transit.
+  
+**Why Encrypting Secrets Matters:**
+
+- **Data Protection:** Encryption obscures secrets, making them unreadable to unauthorized users and systems. This is crucial for protecting sensitive information from being compromised.
+- **Security Assurance:** Using a proven encryption standard like ChaCha20-Poly1305 for secrets reinforces the overall security posture of Configleam, assuring users that their sensitive data is well-protected.
+- **Operational Integrity:** Securely managing secrets helps maintain the integrity of operations within Configleam and the applications it supports, preventing security breaches that could lead to operational disruptions.
 
 </details>
 

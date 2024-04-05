@@ -20,6 +20,10 @@ const (
 	PullIntervalDefault = 5 * time.Second
 )
 
+type Notify interface {
+	NotifyConfigUpdate(ctx context.Context, repo, env, version string)
+}
+
 type Secrets interface {
 	InsertSecrets(ctx context.Context, env string, cfg *map[string]interface{}, populate bool) error
 	CloneSecrets(ctx context.Context, env, newEnv string) error
@@ -49,7 +53,9 @@ type ConfigurationService struct {
 	extractor  Extractor
 	parser     Parser
 	analyzer   Analyzer
-	secrets    Secrets
+
+	secrets Secrets
+	notify  Notify
 }
 
 type ConfigurationConfig struct {
@@ -59,7 +65,7 @@ type ConfigurationConfig struct {
 	PullInterval time.Duration
 }
 
-func New(cfg ConfigurationConfig, parser Parser, extractor Extractor, repository repository.Repository, analyzer Analyzer, secrets Secrets) *ConfigurationService {
+func New(cfg ConfigurationConfig, parser Parser, extractor Extractor, repository repository.Repository, analyzer Analyzer, secrets Secrets, notify Notify) *ConfigurationService {
 	gitrepo, err := gitmanager.NewGitRepository(cfg.RepoUrl, cfg.Branch, cfg.Envs)
 	if err != nil {
 		log.Fatalf("Fatal generating '%s' local git-repository", cfg.RepoUrl)
@@ -84,6 +90,7 @@ func New(cfg ConfigurationConfig, parser Parser, extractor Extractor, repository
 		parser:       parser,
 		analyzer:     analyzer,
 		secrets:      secrets,
+		notify:       notify,
 	}
 }
 
@@ -189,12 +196,12 @@ func (s *ConfigurationService) buildConfigFromLocalRepo(ctx context.Context) err
 
 	}
 	if !ok {
-		log.Printf("There are no changes for repo [%s]", s.gitrepo.URL)
+		log.Printf("No changes detected for '%s' repository", s.gitrepo.URL)
 		return nil
 	}
 
 	for _, env := range updatedEnvs {
-		log.Printf("New changes detected, applying updates for [%s] with the new tag [%s]", env.Name, env.Tag)
+		log.Printf("Applying detected new '%s' version for '%s' environment", env.Tag, env.Name)
 
 		s.gitrepo.FetchAndCheckout(env.Tag)
 
@@ -204,24 +211,26 @@ func (s *ConfigurationService) buildConfigFromLocalRepo(ctx context.Context) err
 		s.gitrepo.Mux.Unlock()
 
 		if err != nil {
-			log.Println("Error extracting configuration:", err)
+			log.Printf("Error extracting configuration from '%s' repository for '%s': %v", env.Name, env.Tag, err)
 			return err
 		}
 
 		repoConfig, err := s.parser.ParseConfigList(configList)
 		if err != nil {
-			log.Println("Error parsing configuration list:", err)
+			log.Printf("Error parsing configuration from '%s' repository for '%s': %v", env.Name, env.Tag, err)
 			return err
 		}
 
-		log.Printf("Upserting new repo config for environment '%s'", env.Name)
+		log.Printf("Upserting new configuration for '%s' environment for '%s': %v", env.Name, env.Tag, err)
 		err = s.repository.UpsertConfig(ctx, s.gitrepo.Name, env.Name, repoConfig)
 		if err != nil {
-			log.Printf("Error upserting config for environment '%s' with error %v:", env.Name, err)
+			log.Printf("Error upserting configuration from '%s' environment for '%s': %v", env.Name, env.Tag, err)
 			return err
 		}
 
 		s.gitrepo.SetEnvLatestVersion(ctx, env.Name, env.Tag, env.SemVer)
+
+		s.notify.NotifyConfigUpdate(ctx, s.gitrepo.Name, env.Name, env.Tag)
 	}
 
 	return nil

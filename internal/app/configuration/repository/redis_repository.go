@@ -38,7 +38,7 @@ func (r *RedisRepository) storeConfig(ctx context.Context, repo, env string, con
 	// Store global configurations
 	// Key: <repo>:<env>:global:<key>
 	for configKey, value := range config.Globals {
-		globalKey := r.keys.GetGlobalKeyKey(baseKeyPrefix, GlobalPrefix, configKey)
+		globalKey := r.keys.GetGlobalKeyKey(baseKeyPrefix, configKey)
 		jsonData, err := json.Marshal(value)
 		if err != nil {
 			return fmt.Errorf("error marshaling global config '%s': %v", configKey, err)

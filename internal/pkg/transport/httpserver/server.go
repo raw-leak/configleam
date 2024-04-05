@@ -20,17 +20,19 @@ type httpServer struct {
 	secrets       SecretsSet
 	access        AccessSet
 	dashboard     DashboardSet
+	notify        NotifSet
 
 	permissions PermissionsBuilder
 }
 
-func NewHttpServer(configuration ConfigurationSet, secrets SecretsSet, access AccessSet, dashboard DashboardSet, permissions PermissionsBuilder) *httpServer {
+func NewHttpServer(configuration ConfigurationSet, secrets SecretsSet, access AccessSet, dashboard DashboardSet, notify NotifSet, permissions PermissionsBuilder) *httpServer {
 	return &httpServer{
 		configuration: configuration,
 		secrets:       secrets,
 		access:        access,
 		dashboard:     dashboard,
 		permissions:   permissions,
+		notify:        notify,
 	}
 }
 
@@ -52,6 +54,9 @@ func (s *httpServer) ListenAndServe(httpAddr string, enableTls bool) error {
 	// configuration clone environment business handlers
 	mux.HandleFunc("POST /config/clone", auth.Guard(p.CloneEnvironment)(s.configuration.CloneConfigHandler))
 	mux.HandleFunc("DELETE /config/clone", auth.Guard(p.CloneEnvironment)(s.configuration.DeleteConfigHandler))
+
+	// configuration notify business handlers
+	mux.HandleFunc("GET /config/sse", s.notify.NotifyHandler)
 
 	// secrets business handlers
 	mux.HandleFunc("PUT /secrets", auth.Guard(p.CreateSecrets)(s.secrets.UpsertSecretsHandler))

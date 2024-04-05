@@ -25,12 +25,10 @@ func (a *TagAnalyzer) AnalyzeTagsForUpdates(envs map[string]gitmanager.Env, tags
 	envMap := make(map[string]EnvUpdate)
 
 	for _, tag := range tags {
-		log.Println("received this tag", tag)
-
 		for envName, env := range envs {
 			if strings.HasSuffix(tag, fmt.Sprintf("-%s", envName)) {
 				semVer, err := helper.ExtractSemanticVersionFromTag(tag)
-				log.Printf("extracted this sem-ver %v from this tag %s\n", envMap, tag)
+				// log.Printf("extracted this sem-ver %v from this tag %s\n", envMap, tag)
 
 				if err != nil {
 					log.Printf("error on extracting version from the tag [%s]: %v\n", tag, err)

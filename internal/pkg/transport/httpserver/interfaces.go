@@ -69,6 +69,15 @@ type DashboardEndpoints interface {
 	DeleteAccessKeyHandler(w http.ResponseWriter, r *http.Request)
 }
 
+// notif
+type NotifSet interface {
+	NotifyEndpoints
+}
+
+type NotifyEndpoints interface {
+	NotifyHandler(w http.ResponseWriter, r *http.Request)
+}
+
 // other
 type PermissionsBuilder interface {
 	NewAccessKeyPermissions() *permissions.AccessKeyPermissions
