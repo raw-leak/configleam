@@ -42,8 +42,8 @@ lint: fmt
 	@echo "Running go vet..."
 	@go vet ./...
 
-	@echo "Running golint..."
-	@golint ./...
+	@echo "Running staticcheck..."
+	@staticcheck ./...
 
 ## clean: Clean build files. Runs `go clean` internally
 clean:
