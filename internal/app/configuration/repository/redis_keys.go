@@ -2,19 +2,18 @@ package repository
 
 import "fmt"
 
-
 type RedisKeys struct{}
 
 func (k RedisKeys) GetBaseKey(gitRepoName string, envName string) string {
 	return fmt.Sprintf("%s:%s:%s", ConfigurationPrefix, gitRepoName, envName)
 }
 
-func (k RedisKeys) GetGlobalKeyKey(baseKeyPrefix string, GlobalPrefix string, configKey string) string {
+func (k RedisKeys) GetGlobalKeyKey(baseKeyPrefix string, configKey string) string {
 	return fmt.Sprintf("%s:%s:%s", baseKeyPrefix, GlobalPrefix, configKey)
 }
 
 func (k RedisKeys) GetGroupKey(baseKeyPrefix string, groupName string) string {
-	return fmt.Sprintf("%s:%s", baseKeyPrefix, groupName)
+	return fmt.Sprintf("%s:%s:%s", baseKeyPrefix, GroupPrefix, groupName)
 }
 
 func (k RedisKeys) GetGroupPatternKey(env string, groupName string) string {

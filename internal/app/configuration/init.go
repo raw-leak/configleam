@@ -17,7 +17,7 @@ type ConfigurationSet struct {
 	*controller.ConfigurationEndpoints
 }
 
-func Init(ctx context.Context, cfg *config.Config, secrets service.Secrets) (*ConfigurationSet, error) {
+func Init(ctx context.Context, cfg *config.Config, secrets service.Secrets, notify service.Notify) (*ConfigurationSet, error) {
 	repo, err := repository.New(ctx, repository.RepositoryConfig{
 		RedisAddrs:    cfg.RedisAddrs,
 		RedisUsername: cfg.RedisUsername,
@@ -27,6 +27,7 @@ func Init(ctx context.Context, cfg *config.Config, secrets service.Secrets) (*Co
 		EtcdAddrs:    cfg.EtcdAddrs,
 		EtcdUsername: cfg.EtcdUsername,
 		EtcdPassword: cfg.EtcdPassword,
+		EtcdTLS:      bool(cfg.EtcdTls),
 	})
 	if err != nil {
 		return nil, err
@@ -41,7 +42,7 @@ func Init(ctx context.Context, cfg *config.Config, secrets service.Secrets) (*Co
 		RepoUrl:      cfg.RepoUrl,
 		Envs:         cfg.RepoEnvs,
 		PullInterval: cfg.PullInterval,
-	}, parser, extractor, repo, analyzer, secrets)
+	}, parser, extractor, repo, analyzer, secrets, notify)
 
 	endpoints := controller.New(service)
 
